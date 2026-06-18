@@ -1,0 +1,566 @@
+openapi: 3.1.0
+info:
+  title: RFP Copilot API
+  version: 0.1.0
+  description: |
+    Shared contract for the hackathon RFP Copilot app.
+
+    Naming convention: snake_case everywhere, including JSON fields.
+
+    The AI creates drafts only. Human-reviewed `final_text` is exported.
+servers:
+  - url: http://localhost:8000
+    description: Local backend
+
+tags:
+  - name: health
+  - name: projects
+  - name: documents
+  - name: questions
+  - name: answers
+  - name: export
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      operationId: get_health
+      responses:
+        '200':
+          description: API is running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /projects:
+    post:
+      tags: [projects]
+      summary: Create a new RFP response project
+      operationId: create_project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+      responses:
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+    get:
+      tags: [projects]
+      summary: List projects
+      operationId: list_projects
+      responses:
+        '200':
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+
+  /projects/{project_id}:
+    get:
+      tags: [projects]
+      summary: Get a project
+      operationId: get_project
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      responses:
+        '200':
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{project_id}/documents/rfp:
+    post:
+      tags: [documents]
+      summary: Upload the RFP/tender document for a project
+      operationId: upload_rfp_document
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: RFP document uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+
+  /projects/{project_id}/documents/knowledge:
+    post:
+      tags: [documents]
+      summary: Upload a knowledge-base document for a project
+      operationId: upload_knowledge_document
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Knowledge document uploaded and processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+
+  /projects/{project_id}/documents:
+    get:
+      tags: [documents]
+      summary: List project documents
+      operationId: list_documents
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      responses:
+        '200':
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+
+  /projects/{project_id}/extract_questions:
+    post:
+      tags: [questions]
+      summary: Extract RFP questions/requirements from the uploaded RFP document
+      operationId: extract_questions
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      responses:
+        '200':
+          description: Extracted questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RfpQuestion'
+
+  /projects/{project_id}/questions:
+    get:
+      tags: [questions]
+      summary: List project questions
+      operationId: list_questions
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      responses:
+        '200':
+          description: Questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RfpQuestion'
+
+  /questions/{question_id}/draft_answer:
+    post:
+      tags: [answers]
+      summary: Generate or regenerate a draft answer for a question
+      operationId: draft_answer
+      parameters:
+        - $ref: '#/components/parameters/question_id'
+      responses:
+        '200':
+          description: Draft answer with citations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionAnswerBundle'
+
+  /questions/{question_id}/answer:
+    get:
+      tags: [answers]
+      summary: Get the answer and citations for a question
+      operationId: get_question_answer
+      parameters:
+        - $ref: '#/components/parameters/question_id'
+      responses:
+        '200':
+          description: Question answer bundle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionAnswerBundle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /answers/{answer_id}:
+    patch:
+      tags: [answers]
+      summary: Update the human-editable final answer text
+      operationId: update_answer
+      parameters:
+        - $ref: '#/components/parameters/answer_id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerUpdate'
+      responses:
+        '200':
+          description: Updated answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+
+  /answers/{answer_id}/approve:
+    post:
+      tags: [answers]
+      summary: Mark answer as approved
+      operationId: approve_answer
+      parameters:
+        - $ref: '#/components/parameters/answer_id'
+      responses:
+        '200':
+          description: Approved answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+
+  /answers/{answer_id}/flag:
+    post:
+      tags: [answers]
+      summary: Flag answer for review
+      operationId: flag_answer
+      parameters:
+        - $ref: '#/components/parameters/answer_id'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerFlagRequest'
+      responses:
+        '200':
+          description: Flagged answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+
+  /answers/{answer_id}/reject:
+    post:
+      tags: [answers]
+      summary: Reject answer
+      operationId: reject_answer
+      parameters:
+        - $ref: '#/components/parameters/answer_id'
+      responses:
+        '200':
+          description: Rejected answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+
+  /projects/{project_id}/export:
+    post:
+      tags: [export]
+      summary: Export approved/edited answers to DOCX
+      operationId: export_project
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      responses:
+        '200':
+          description: Export result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
+
+components:
+  parameters:
+    project_id:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+    question_id:
+      name: question_id
+      in: path
+      required: true
+      schema:
+        type: string
+    answer_id:
+      name: answer_id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+
+    ProjectStatus:
+      type: string
+      enum: [active, completed, archived]
+
+    DocumentType:
+      type: string
+      enum: [rfp, knowledge]
+
+    DocumentStatus:
+      type: string
+      enum: [uploaded, processing, processed, failed]
+
+    QuestionStatus:
+      type: string
+      enum: [pending, drafted, approved, flagged]
+
+    AnswerStatus:
+      type: string
+      enum: [not_started, drafted, edited, approved, flagged, rejected]
+
+    QuestionCategory:
+      type: string
+      enum: [general, technical, security, legal, pricing, implementation, support, compliance, experience]
+
+    ProjectCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: City Hospital RFP
+        client_name:
+          type: string
+          nullable: true
+          example: City Hospital
+
+    Project:
+      type: object
+      required: [id, name, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        client_name:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Document:
+      type: object
+      required: [id, project_id, document_type, filename, mime_type, status, created_at]
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        document_type:
+          $ref: '#/components/schemas/DocumentType'
+        filename:
+          type: string
+        mime_type:
+          type: string
+        status:
+          $ref: '#/components/schemas/DocumentStatus'
+        created_at:
+          type: string
+          format: date-time
+
+    KnowledgeChunk:
+      type: object
+      required: [id, document_id, document_title, text, chunk_index]
+      properties:
+        id:
+          type: string
+        document_id:
+          type: string
+        document_title:
+          type: string
+        text:
+          type: string
+        page_number:
+          type: integer
+          nullable: true
+        section_title:
+          type: string
+          nullable: true
+        chunk_index:
+          type: integer
+
+    RfpQuestion:
+      type: object
+      required: [id, project_id, question_text, category, order_index, status]
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        question_text:
+          type: string
+        category:
+          $ref: '#/components/schemas/QuestionCategory'
+        source_section:
+          type: string
+          nullable: true
+        source_text:
+          type: string
+          nullable: true
+        order_index:
+          type: integer
+        status:
+          $ref: '#/components/schemas/QuestionStatus'
+
+    Answer:
+      type: object
+      required: [id, question_id, draft_text, final_text, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        question_id:
+          type: string
+        draft_text:
+          type: string
+        final_text:
+          type: string
+        status:
+          $ref: '#/components/schemas/AnswerStatus'
+        review_note:
+          type: string
+          nullable: true
+        warning:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AnswerUpdate:
+      type: object
+      required: [final_text]
+      properties:
+        final_text:
+          type: string
+        review_note:
+          type: string
+          nullable: true
+
+    AnswerFlagRequest:
+      type: object
+      properties:
+        review_note:
+          type: string
+          nullable: true
+          example: Needs legal confirmation.
+
+    Citation:
+      type: object
+      required: [id, answer_id, chunk_id, document_title, excerpt]
+      properties:
+        id:
+          type: string
+        answer_id:
+          type: string
+        chunk_id:
+          type: string
+        document_title:
+          type: string
+        section_title:
+          type: string
+          nullable: true
+        page_number:
+          type: integer
+          nullable: true
+        excerpt:
+          type: string
+        relevance_score:
+          type: number
+          format: float
+          nullable: true
+
+    QuestionAnswerBundle:
+      type: object
+      required: [question_id, question_text, answer, citations]
+      properties:
+        question_id:
+          type: string
+        question_text:
+          type: string
+        answer:
+          $ref: '#/components/schemas/Answer'
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Citation'
+
+    ExportResponse:
+      type: object
+      required: [download_url, exported_answer_count]
+      properties:
+        download_url:
+          type: string
+          example: /exports/project_123/final-response.docx
+        exported_answer_count:
+          type: integer
