@@ -11,7 +11,7 @@ React frontend
       -> retrieval
       -> answer generation
       -> review state management
-      -> DOCX export
+      -> PDF export
   -> PostgreSQL + pgvector target
 ```
 
@@ -141,7 +141,7 @@ Responsibilities:
 File:
 
 ```text
-backend/app/services/export_docx.py
+backend/app/services/export_pdf.py
 ```
 
 Responsibilities:

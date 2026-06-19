@@ -41,7 +41,7 @@ We are intentionally **not** building microservices for the hackathon. Keep the 
 | RAG | custom Python service functions first; framework optional later |
 | LLM | OpenAI-compatible API via environment variables |
 | Documents | PDF/DOCX/TXT/MD parsing |
-| Export | DOCX first |
+| Export | PDF |
 | Local dev | Docker Compose |
 
 ## Important project rule
@@ -184,7 +184,7 @@ Backend/API owner:
   backend/app/schemas/
   backend/app/models/
   backend/app/db/
-  backend/app/services/export_docx.py
+  backend/app/services/export_pdf.py
 
 RAG/AI owner:
   backend/app/services/document_parser.py
@@ -208,7 +208,7 @@ In scope:
 - show citations/source excerpts
 - edit final answer
 - approve/flag/reject answers
-- export reviewed answers to DOCX
+- export reviewed answers to PDF
 
 Out of scope for the hackathon MVP:
 
