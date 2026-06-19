@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session import get_db
-from app.models import AnswerRecord, CitationRecord, ProjectRecord, RfpQuestionRecord
+from app.models import AnswerRecord, ProjectRecord, RfpQuestionRecord
 from app.schemas.export import ExportResponse
 from app.services.export_pdf import export_project_to_pdf
 
@@ -31,19 +31,10 @@ def export_project(project_id: str, db: DbSession) -> ExportResponse:
             AnswerRecord.question_id.in_([question.id for question in question_records])
         )
     ).all()
-    citation_records = db.scalars(
-        select(CitationRecord).where(
-            CitationRecord.answer_id.in_([answer.id for answer in answer_records])
-        )
-    ).all()
-
     questions = [question.to_schema() for question in question_records]
     answers_by_question_id = {
         answer.question_id: answer.to_schema() for answer in answer_records
     }
-    citations_by_answer_id = {answer.id: [] for answer in answer_records}
-    for citation in citation_records:
-        citations_by_answer_id.setdefault(citation.answer_id, []).append(citation.to_schema())
 
     filename = f"{project.id}_final_response.pdf"
     output_path = settings.export_dir / filename
@@ -51,7 +42,6 @@ def export_project(project_id: str, db: DbSession) -> ExportResponse:
         project_name=project.name,
         questions=questions,
         answers_by_question_id=answers_by_question_id,
-        citations_by_answer_id=citations_by_answer_id,
         output_path=output_path,
     )
     return ExportResponse(download_url=f"/exports/{filename}", exported_answer_count=count)

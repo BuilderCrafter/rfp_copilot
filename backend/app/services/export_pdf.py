@@ -3,7 +3,7 @@ import textwrap
 
 import fitz
 
-from app.schemas.answer import Answer, AnswerStatus, Citation
+from app.schemas.answer import Answer, AnswerStatus
 from app.schemas.question import RfpQuestion
 
 EXPORTABLE_STATUSES = {AnswerStatus.approved, AnswerStatus.edited}
@@ -17,7 +17,6 @@ def export_project_to_pdf(
     project_name: str,
     questions: list[RfpQuestion],
     answers_by_question_id: dict[str, Answer],
-    citations_by_answer_id: dict[str, list[Citation]],
     output_path: Path,
 ) -> int:
     """Export approved/edited answers to a PDF file using reviewed final text."""
@@ -68,18 +67,6 @@ def export_project_to_pdf(
         write_wrapped(question.question_text, font_size=13, bold=True)
         y += 4
         write_wrapped(answer.final_text)
-
-        citations = citations_by_answer_id.get(answer.id, [])
-        if citations:
-            y += 6
-            write_line("Sources:", bold=True)
-            for citation in citations:
-                source = citation.document_title
-                if citation.section_title:
-                    source += f", {citation.section_title}"
-                if citation.page_number is not None:
-                    source += f", page {citation.page_number}"
-                write_wrapped(f"- {source}", font_size=10, indent=12)
         y += 16
 
     doc.save(output_path)
