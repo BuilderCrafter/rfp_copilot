@@ -8,7 +8,7 @@ from app.config import settings
 from app.db.session import get_db
 from app.models import AnswerRecord, CitationRecord, ProjectRecord, RfpQuestionRecord
 from app.schemas.export import ExportResponse
-from app.services.export_docx import export_project_to_docx
+from app.services.export_pdf import export_project_to_pdf
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["export"])
 DbSession = Annotated[Session, Depends(get_db)]
@@ -16,7 +16,7 @@ DbSession = Annotated[Session, Depends(get_db)]
 
 @router.post("/export", response_model=ExportResponse, operation_id="export_project")
 def export_project(project_id: str, db: DbSession) -> ExportResponse:
-    """Export approved/edited project answers to DOCX."""
+    """Export approved/edited project answers to PDF."""
     project = db.get(ProjectRecord, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -45,9 +45,9 @@ def export_project(project_id: str, db: DbSession) -> ExportResponse:
     for citation in citation_records:
         citations_by_answer_id.setdefault(citation.answer_id, []).append(citation.to_schema())
 
-    filename = f"{project.id}_final_response.docx"
+    filename = f"{project.id}_final_response.pdf"
     output_path = settings.export_dir / filename
-    count = export_project_to_docx(
+    count = export_project_to_pdf(
         project_name=project.name,
         questions=questions,
         answers_by_question_id=answers_by_question_id,

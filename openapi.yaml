@@ -293,7 +293,7 @@ paths:
   /projects/{project_id}/export:
     post:
       tags: [export]
-      summary: Export approved/edited answers to DOCX
+      summary: Export approved/edited answers to PDF
       operationId: export_project
       parameters:
         - $ref: '#/components/parameters/project_id'
@@ -561,6 +561,6 @@ components:
       properties:
         download_url:
           type: string
-          example: /exports/project_123/final-response.docx
+          example: /exports/project_123/final-response.pdf
         exported_answer_count:
           type: integer

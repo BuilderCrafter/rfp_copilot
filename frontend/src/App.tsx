@@ -545,7 +545,16 @@ export function App() {
   async function exportProject() {
     if (!project) return;
     const result = await api.export_project(project.id);
-    setMessage(`Exported ${result.exported_answer_count} approved responses.`);
+    const file = await api.download_export_file(result.download_url);
+    const objectUrl = URL.createObjectURL(file);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = objectUrl;
+    downloadLink.download = `${project.name.replace(/[^a-z0-9_-]+/gi, '_')}_final_response.pdf`;
+    document.body.append(downloadLink);
+    downloadLink.click();
+    downloadLink.remove();
+    URL.revokeObjectURL(objectUrl);
+    setMessage(`Exported ${result.exported_answer_count} approved responses to PDF.`);
   }
 
   return (

@@ -100,9 +100,9 @@ Done when:
 - answer status transitions work
 - citation objects are returned with answer responses
 
-### BE-05: DOCX export
+### BE-05: PDF export
 
-Export approved/edited final answers to DOCX.
+Export approved/edited final answers to PDF.
 
 Done when:
 
@@ -189,7 +189,7 @@ Done when:
 - extract questions
 - draft answers
 - review answers
-- export DOCX
+- export PDF
 
 ### INT-02: Demo polish
 

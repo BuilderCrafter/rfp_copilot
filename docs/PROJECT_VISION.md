@@ -22,7 +22,7 @@ The app provides a workspace where a user uploads an RFP and company knowledge d
 
 ## Main demo story
 
-A bid manager creates a project, uploads an RFP, extracts questions, uploads a few knowledge documents, generates one or more answers, reviews citations, edits/approves answers, and exports a final DOCX.
+A bid manager creates a project, uploads an RFP, extracts questions, uploads a few knowledge documents, generates one or more answers, reviews citations, edits/approves answers, and exports a final PDF.
 
 ## Target users
 

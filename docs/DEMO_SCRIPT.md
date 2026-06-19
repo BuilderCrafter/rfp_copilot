@@ -36,7 +36,7 @@ The product turns that scattered knowledge into source-backed first drafts that 
 8. Edit the final answer slightly.
 9. Approve it.
 10. Select a question that has weaker source support and show that it is flagged instead of invented.
-11. Export the reviewed answers to DOCX.
+11. Export the reviewed answers to PDF.
 
 ## What to emphasize
 

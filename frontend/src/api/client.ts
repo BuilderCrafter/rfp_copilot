@@ -26,6 +26,24 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function requestBlob(path: string): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(new URL(path, API_BASE_URL).toString());
+  } catch {
+    throw new Error(
+      `Cannot reach the API at ${API_BASE_URL}. Start the backend with: cd backend && uvicorn app.main:app --reload`,
+    );
+  }
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`API ${response.status}: ${body}`);
+  }
+
+  return response.blob();
+}
+
 export const api = {
   sample_data_url: (path: string) => `${API_BASE_URL}/sample_data/${path}`,
 
@@ -73,4 +91,5 @@ export const api = {
 
   export_project: (project_id: string) =>
     request<ExportResponse>(`/projects/${project_id}/export`, { method: 'POST' }),
+  download_export_file: (download_url: string) => requestBlob(download_url),
 };

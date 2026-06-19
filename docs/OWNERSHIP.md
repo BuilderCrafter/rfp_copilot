@@ -44,7 +44,7 @@ backend/app/schemas/
 backend/app/models/
 backend/app/db/
 backend/app/storage/
-backend/app/services/export_docx.py
+backend/app/services/export_pdf.py
 ```
 
 Responsibilities:
@@ -115,7 +115,7 @@ Suggested branches:
 feature/frontend-review-workspace
 feature/backend-api-storage
 feature/rag-ingestion-generation
-feature/export-docx
+feature/export-pdf
 fix/api-contract-sync
 ```
 
