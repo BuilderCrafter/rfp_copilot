@@ -640,13 +640,6 @@ export function App() {
           if (gondorAudioRef.current?.ended) finishGondorTheme();
         }}
       />
-      <img
-        className="app-watermark"
-        src={isDiscoActive ? '/brno.jpg' : '/IT.png'}
-        alt=""
-        aria-hidden="true"
-      />
-
       <NewProjectModal
         isOpen={showNewProjectModal}
         isSubmitting={isCreatingProject}
