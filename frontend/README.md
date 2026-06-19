@@ -1,6 +1,6 @@
 # Frontend
 
-React + TypeScript + Vite frontend for RFP Copilot.
+React + TypeScript + Vite frontend for Serbian Vibe RFP.
 
 ## Run
 
