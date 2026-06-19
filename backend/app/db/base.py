@@ -1,2 +1,5 @@
-# Placeholder for SQLAlchemy declarative base.
-# Backend owner can replace the in-memory store with real database models/migrations.
+from sqlalchemy.orm import DeclarativeBase
+
+
+class Base(DeclarativeBase):
+    """Base class for SQLAlchemy models."""

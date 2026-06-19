@@ -1,45 +1,60 @@
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.db.session import get_db
+from app.models import (
+    AnswerRecord,
+    CitationRecord,
+    DocumentRecord,
+    KnowledgeChunkRecord,
+    RfpQuestionRecord,
+)
 from app.schemas.answer import (
     Answer,
     AnswerFlagRequest,
     AnswerStatus,
     AnswerUpdate,
-    Citation,
     QuestionAnswerBundle,
 )
 from app.schemas.common import ErrorResponse, new_id, utc_now
 from app.schemas.question import QuestionStatus
 from app.services.answer_generation import draft_answer_from_sources
 from app.services.retrieval import retrieve_relevant_chunks
-from app.storage.memory_store import store
 
 router = APIRouter(tags=["answers"])
+DbSession = Annotated[Session, Depends(get_db)]
 
 
-def _get_answer(answer_id: str) -> Answer:
-    answer = store.answers.get(answer_id)
+def _get_answer_record(answer_id: str, db: Session) -> AnswerRecord:
+    answer = db.get(AnswerRecord, answer_id)
     if not answer:
         raise HTTPException(status_code=404, detail="Answer not found")
     return answer
 
 
-def _bundle_for_question(question_id: str) -> QuestionAnswerBundle:
-    question = store.questions.get(question_id)
+def _bundle_for_question(question_id: str, db: Session) -> QuestionAnswerBundle:
+    question = db.get(RfpQuestionRecord, question_id)
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
 
-    answer = next((a for a in store.answers.values() if a.question_id == question_id), None)
+    answer = db.scalars(
+        select(AnswerRecord).where(AnswerRecord.question_id == question_id)
+    ).first()
     if not answer:
         raise HTTPException(status_code=404, detail="Answer not found for question")
 
-    citations = [citation for citation in store.citations.values() if citation.answer_id == answer.id]
+    citations = db.scalars(
+        select(CitationRecord).where(CitationRecord.answer_id == answer.id)
+    ).all()
     return QuestionAnswerBundle(
         question_id=question.id,
         question_text=question.question_text,
-        answer=answer,
-        citations=citations,
+        answer=answer.to_schema(),
+        citations=[citation.to_schema() for citation in citations],
     )
 
 
@@ -48,17 +63,19 @@ def _bundle_for_question(question_id: str) -> QuestionAnswerBundle:
     response_model=QuestionAnswerBundle,
     operation_id="draft_answer",
 )
-def draft_answer(question_id: str) -> QuestionAnswerBundle:
+def draft_answer(question_id: str, db: DbSession) -> QuestionAnswerBundle:
     """Generate or regenerate a draft answer for one question."""
-    question = store.questions.get(question_id)
+    question = db.get(RfpQuestionRecord, question_id)
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
 
-    project_chunks = [
-        chunk
-        for chunk in store.chunks.values()
-        if store.documents[chunk.document_id].project_id == question.project_id
-    ]
+    project_chunk_records = db.scalars(
+        select(KnowledgeChunkRecord)
+        .join(DocumentRecord)
+        .where(DocumentRecord.project_id == question.project_id)
+        .order_by(KnowledgeChunkRecord.document_title, KnowledgeChunkRecord.chunk_index)
+    ).all()
+    project_chunks = [chunk.to_schema() for chunk in project_chunk_records]
     retrieved = retrieve_relevant_chunks(
         question_text=question.question_text,
         chunks=project_chunks,
@@ -67,31 +84,43 @@ def draft_answer(question_id: str) -> QuestionAnswerBundle:
     result = draft_answer_from_sources(question.question_text, retrieved)
 
     now = utc_now()
-    existing = next((a for a in store.answers.values() if a.question_id == question.id), None)
-    answer_id = existing.id if existing else new_id("answer")
+    existing = db.scalars(
+        select(AnswerRecord).where(AnswerRecord.question_id == question.id)
+    ).first()
     status = AnswerStatus.flagged if result.warning else AnswerStatus.drafted
 
-    answer = Answer(
-        id=answer_id,
-        question_id=question.id,
-        draft_text=result.draft_text,
-        final_text=result.draft_text,
-        status=status,
-        review_note=None,
-        warning=result.warning,
-        created_at=existing.created_at if existing else now,
-        updated_at=now,
-    )
-    store.answers[answer.id] = answer
+    if existing:
+        answer = existing
+        answer.draft_text = result.draft_text
+        answer.final_text = result.draft_text
+        answer.status = status.value
+        answer.review_note = None
+        answer.warning = result.warning
+        answer.updated_at = now
+    else:
+        answer = AnswerRecord(
+            id=new_id("answer"),
+            question_id=question.id,
+            draft_text=result.draft_text,
+            final_text=result.draft_text,
+            status=status.value,
+            review_note=None,
+            warning=result.warning,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(answer)
+        db.flush()
 
     # Remove old citations for regenerated answers.
-    for citation_id, citation in list(store.citations.items()):
-        if citation.answer_id == answer.id:
-            del store.citations[citation_id]
+    for citation in db.scalars(
+        select(CitationRecord).where(CitationRecord.answer_id == answer.id)
+    ).all():
+        db.delete(citation)
 
-    citations: list[Citation] = []
+    citations: list[CitationRecord] = []
     for candidate in result.citations:
-        citation = Citation(
+        citation = CitationRecord(
             id=new_id("citation"),
             answer_id=answer.id,
             chunk_id=candidate.chunk_id,
@@ -101,17 +130,18 @@ def draft_answer(question_id: str) -> QuestionAnswerBundle:
             excerpt=candidate.excerpt,
             relevance_score=candidate.relevance_score,
         )
-        store.citations[citation.id] = citation
+        db.add(citation)
         citations.append(citation)
 
     question_status = QuestionStatus.flagged if result.warning else QuestionStatus.drafted
-    store.questions[question.id] = question.model_copy(update={"status": question_status})
+    question.status = question_status.value
+    db.commit()
 
     return QuestionAnswerBundle(
         question_id=question.id,
         question_text=question.question_text,
-        answer=answer,
-        citations=citations,
+        answer=answer.to_schema(),
+        citations=[citation.to_schema() for citation in citations],
     )
 
 
@@ -121,63 +151,61 @@ def draft_answer(question_id: str) -> QuestionAnswerBundle:
     responses={404: {"model": ErrorResponse}},
     operation_id="get_question_answer",
 )
-def get_question_answer(question_id: str) -> QuestionAnswerBundle:
+def get_question_answer(question_id: str, db: DbSession) -> QuestionAnswerBundle:
     """Return the answer and citations for a question."""
-    return _bundle_for_question(question_id)
+    return _bundle_for_question(question_id, db)
 
 
 @router.patch("/answers/{answer_id}", response_model=Answer, operation_id="update_answer")
-def update_answer(answer_id: str, payload: AnswerUpdate) -> Answer:
+def update_answer(answer_id: str, payload: AnswerUpdate, db: DbSession) -> Answer:
     """Update reviewer-controlled final text and mark the answer as edited."""
-    answer = _get_answer(answer_id)
-    updated = answer.model_copy(
-        update={
-            "final_text": payload.final_text,
-            "review_note": payload.review_note,
-            "status": AnswerStatus.edited,
-            "updated_at": utc_now(),
-        }
-    )
-    store.answers[answer_id] = updated
-    return updated
+    answer = _get_answer_record(answer_id, db)
+    answer.final_text = payload.final_text
+    answer.review_note = payload.review_note
+    answer.status = AnswerStatus.edited.value
+    answer.updated_at = utc_now()
+    db.commit()
+    return answer.to_schema()
 
 
 @router.post("/answers/{answer_id}/approve", response_model=Answer, operation_id="approve_answer")
-def approve_answer(answer_id: str) -> Answer:
+def approve_answer(answer_id: str, db: DbSession) -> Answer:
     """Mark an answer as approved for export."""
-    answer = _get_answer(answer_id)
-    updated = answer.model_copy(update={"status": AnswerStatus.approved, "updated_at": utc_now()})
-    store.answers[answer_id] = updated
+    answer = _get_answer_record(answer_id, db)
+    answer.status = AnswerStatus.approved.value
+    answer.updated_at = utc_now()
 
-    question = store.questions.get(answer.question_id)
+    question = db.get(RfpQuestionRecord, answer.question_id)
     if question:
-        store.questions[question.id] = question.model_copy(update={"status": QuestionStatus.approved})
-    return updated
+        question.status = QuestionStatus.approved.value
+    db.commit()
+    return answer.to_schema()
 
 
 @router.post("/answers/{answer_id}/flag", response_model=Answer, operation_id="flag_answer")
-def flag_answer(answer_id: str, payload: AnswerFlagRequest | None = None) -> Answer:
+def flag_answer(
+    answer_id: str,
+    db: DbSession,
+    payload: AnswerFlagRequest | None = None,
+) -> Answer:
     """Flag an answer for additional human review."""
-    answer = _get_answer(answer_id)
-    updated = answer.model_copy(
-        update={
-            "status": AnswerStatus.flagged,
-            "review_note": payload.review_note if payload else answer.review_note,
-            "updated_at": utc_now(),
-        }
-    )
-    store.answers[answer_id] = updated
+    answer = _get_answer_record(answer_id, db)
+    answer.status = AnswerStatus.flagged.value
+    answer.review_note = payload.review_note if payload else answer.review_note
+    answer.updated_at = utc_now()
 
-    question = store.questions.get(answer.question_id)
+    question = db.get(RfpQuestionRecord, answer.question_id)
     if question:
-        store.questions[question.id] = question.model_copy(update={"status": QuestionStatus.flagged})
-    return updated
+        question.status = QuestionStatus.flagged.value
+    db.commit()
+    return answer.to_schema()
 
 
 @router.post("/answers/{answer_id}/reject", response_model=Answer, operation_id="reject_answer")
-def reject_answer(answer_id: str) -> Answer:
+def reject_answer(answer_id: str, db: DbSession) -> Answer:
     """Reject an answer so it is excluded from export."""
-    answer = _get_answer(answer_id)
-    updated = answer.model_copy(update={"status": AnswerStatus.rejected, "updated_at": utc_now()})
-    store.answers[answer_id] = updated
-    return updated
+    answer = _get_answer_record(answer_id, db)
+    answer.status = AnswerStatus.rejected.value
+    answer.updated_at = utc_now()
+    db.commit()
+    return answer.to_schema()

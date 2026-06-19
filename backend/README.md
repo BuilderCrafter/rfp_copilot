@@ -19,7 +19,7 @@ http://localhost:8000/docs
 
 ## Current state
 
-The backend is intentionally scaffolded with in-memory storage so frontend and RAG work can begin immediately. The target database is PostgreSQL + pgvector.
+The backend persists MVP state in PostgreSQL through SQLAlchemy models. Tables are created automatically on backend startup for the hackathon flow. The pgvector extension is available through local Docker Compose, but retrieval still uses the simple lexical fallback until embedding retrieval is added.
 
 ## Important rules
 

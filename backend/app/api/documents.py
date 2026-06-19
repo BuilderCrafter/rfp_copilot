@@ -1,19 +1,24 @@
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.db.session import get_db
+from app.models import DocumentRecord, KnowledgeChunkRecord, ProjectRecord
 from app.schemas.common import new_id, utc_now
-from app.schemas.document import Document, DocumentStatus, DocumentType, KnowledgeChunk
+from app.schemas.document import Document, DocumentStatus, DocumentType
 from app.services.document_parser import UnsupportedDocumentError, extract_text_from_file
 from app.services.knowledge_ingestion import chunk_knowledge_document
-from app.storage.memory_store import store
 
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
+DbSession = Annotated[Session, Depends(get_db)]
 
 
-def _ensure_project(project_id: str) -> None:
-    if project_id not in store.projects:
+def _ensure_project(project_id: str, db: Session) -> None:
+    if not db.get(ProjectRecord, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
 
 
@@ -27,48 +32,61 @@ def _save_upload(project_id: str, upload: UploadFile) -> Path:
     return path
 
 
-def _remove_existing_rfp_documents(project_id: str) -> None:
+def _remove_existing_rfp_documents(project_id: str, db: Session) -> None:
     """Keep the MVP contract to one RFP document per project."""
-    for document_id, document in list(store.documents.items()):
-        if document.project_id == project_id and document.document_type == DocumentType.rfp:
-            del store.documents[document_id]
-            store.document_texts.pop(document_id, None)
+    documents = db.scalars(
+        select(DocumentRecord).where(
+            DocumentRecord.project_id == project_id,
+            DocumentRecord.document_type == DocumentType.rfp.value,
+        )
+    ).all()
+    for document in documents:
+        db.delete(document)
 
 
-def _create_document(project_id: str, file: UploadFile, document_type: DocumentType) -> Document:
-    _ensure_project(project_id)
+def _create_document(
+    project_id: str,
+    file: UploadFile,
+    document_type: DocumentType,
+    db: Session,
+) -> Document:
+    _ensure_project(project_id, db)
     if document_type == DocumentType.rfp:
-        _remove_existing_rfp_documents(project_id)
+        _remove_existing_rfp_documents(project_id, db)
 
     path = _save_upload(project_id, file)
-    document = Document(
+    document = DocumentRecord(
         id=new_id("doc"),
         project_id=project_id,
-        document_type=document_type,
+        document_type=document_type.value,
         filename=Path(file.filename or path.name).name,
         mime_type=file.content_type or "application/octet-stream",
-        status=DocumentStatus.processing,
+        status=DocumentStatus.processing.value,
         created_at=utc_now(),
+        stored_path=str(path),
+        extracted_text=None,
     )
-    store.documents[document.id] = document
+    db.add(document)
+    db.commit()
+    db.refresh(document)
 
     try:
         text = extract_text_from_file(path)
     except UnsupportedDocumentError as exc:
-        failed = document.model_copy(update={"status": DocumentStatus.failed})
-        store.documents[document.id] = failed
+        document.status = DocumentStatus.failed.value
+        db.commit()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    store.document_texts[document.id] = text
+    document.extracted_text = text
 
     if document_type == DocumentType.knowledge:
         for candidate in chunk_knowledge_document(document.id, document.filename, text):
-            chunk = KnowledgeChunk(**candidate.__dict__)
-            store.chunks[chunk.id] = chunk
+            db.add(KnowledgeChunkRecord(**candidate.__dict__))
 
-    processed = document.model_copy(update={"status": DocumentStatus.processed})
-    store.documents[document.id] = processed
-    return processed
+    document.status = DocumentStatus.processed.value
+    db.commit()
+    db.refresh(document)
+    return document.to_schema()
 
 
 @router.post(
@@ -77,9 +95,9 @@ def _create_document(project_id: str, file: UploadFile, document_type: DocumentT
     status_code=status.HTTP_201_CREATED,
     operation_id="upload_rfp_document",
 )
-def upload_rfp_document(project_id: str, file: UploadFile = File(...)) -> Document:
+def upload_rfp_document(project_id: str, db: DbSession, file: UploadFile = File(...)) -> Document:
     """Upload and parse the RFP/tender document for a project."""
-    return _create_document(project_id, file, DocumentType.rfp)
+    return _create_document(project_id, file, DocumentType.rfp, db)
 
 
 @router.post(
@@ -88,13 +106,22 @@ def upload_rfp_document(project_id: str, file: UploadFile = File(...)) -> Docume
     status_code=status.HTTP_201_CREATED,
     operation_id="upload_knowledge_document",
 )
-def upload_knowledge_document(project_id: str, file: UploadFile = File(...)) -> Document:
+def upload_knowledge_document(
+    project_id: str,
+    db: DbSession,
+    file: UploadFile = File(...),
+) -> Document:
     """Upload, parse, and chunk a knowledge-base document for a project."""
-    return _create_document(project_id, file, DocumentType.knowledge)
+    return _create_document(project_id, file, DocumentType.knowledge, db)
 
 
 @router.get("", response_model=list[Document], operation_id="list_documents")
-def list_documents(project_id: str) -> list[Document]:
+def list_documents(project_id: str, db: DbSession) -> list[Document]:
     """List documents for a project."""
-    _ensure_project(project_id)
-    return [document for document in store.documents.values() if document.project_id == project_id]
+    _ensure_project(project_id, db)
+    documents = db.scalars(
+        select(DocumentRecord)
+        .where(DocumentRecord.project_id == project_id)
+        .order_by(DocumentRecord.created_at)
+    ).all()
+    return [document.to_schema() for document in documents]

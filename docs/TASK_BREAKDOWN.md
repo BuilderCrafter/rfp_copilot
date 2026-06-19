@@ -114,6 +114,8 @@ Done when:
 
 Replace or supplement in-memory storage with PostgreSQL/pgvector if time allows.
 
+Status: baseline PostgreSQL persistence is implemented with SQLAlchemy and automatic MVP table creation. pgvector-backed retrieval is still future work.
+
 Done when:
 
 - existing API behavior does not change

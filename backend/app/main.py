@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -9,13 +12,22 @@ from app.api.exports import router as exports_router
 from app.api.projects import router as projects_router
 from app.api.questions import router as questions_router
 from app.config import settings
+from app.db.session import init_db
 from app.schemas.common import HealthResponse
 from app.schemas.document import KnowledgeChunk
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    init_db()
+    yield
+
 
 app = FastAPI(
     title="RFP Copilot API",
     version="0.1.0",
     description="Hackathon MVP backend for source-backed RFP answer drafting.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

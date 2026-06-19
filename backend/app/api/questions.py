@@ -1,79 +1,79 @@
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
 
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.models import DocumentRecord, ProjectRecord, RfpQuestionRecord
 from app.schemas.common import new_id
 from app.schemas.document import DocumentType
 from app.schemas.question import QuestionStatus, RfpQuestion
 from app.services.question_extraction import extract_questions_from_text
-from app.storage.memory_store import store
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["questions"])
+DbSession = Annotated[Session, Depends(get_db)]
 
 
-def _ensure_project(project_id: str) -> None:
-    if project_id not in store.projects:
+def _ensure_project(project_id: str, db: Session) -> None:
+    if not db.get(ProjectRecord, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
 
 
-def _remove_existing_project_questions(project_id: str) -> None:
+def _remove_existing_project_questions(project_id: str, db: Session) -> None:
     """Make extraction repeatable for the frontend by replacing the prior question set."""
-    question_ids = [
-        question.id for question in store.questions.values() if question.project_id == project_id
-    ]
-    answer_ids = [
-        answer.id for answer in store.answers.values() if answer.question_id in question_ids
-    ]
-
-    for citation_id, citation in list(store.citations.items()):
-        if citation.answer_id in answer_ids:
-            del store.citations[citation_id]
-
-    for answer_id in answer_ids:
-        store.answers.pop(answer_id, None)
-
-    for question_id in question_ids:
-        store.questions.pop(question_id, None)
+    questions = db.scalars(
+        select(RfpQuestionRecord).where(RfpQuestionRecord.project_id == project_id)
+    ).all()
+    for question in questions:
+        db.delete(question)
 
 
 @router.post("/extract_questions", response_model=list[RfpQuestion], operation_id="extract_questions")
-def extract_questions(project_id: str) -> list[RfpQuestion]:
+def extract_questions(project_id: str, db: DbSession) -> list[RfpQuestion]:
     """Extract answerable questions/requirements from the project's RFP document."""
-    _ensure_project(project_id)
-    rfp_docs = [
-        document
-        for document in store.documents.values()
-        if document.project_id == project_id and document.document_type == DocumentType.rfp
-    ]
-    if not rfp_docs:
+    _ensure_project(project_id, db)
+    rfp_doc = db.scalars(
+        select(DocumentRecord)
+        .where(
+            DocumentRecord.project_id == project_id,
+            DocumentRecord.document_type == DocumentType.rfp.value,
+        )
+        .order_by(DocumentRecord.created_at.desc())
+    ).first()
+    if not rfp_doc:
         raise HTTPException(status_code=400, detail="No RFP document uploaded for project")
 
-    rfp_doc = rfp_docs[-1]
-    text = store.document_texts.get(rfp_doc.id, "")
+    text = rfp_doc.extracted_text or ""
     candidates = extract_questions_from_text(project_id, text)
 
-    _remove_existing_project_questions(project_id)
-    created: list[RfpQuestion] = []
+    _remove_existing_project_questions(project_id, db)
+    created: list[RfpQuestionRecord] = []
     for index, candidate in enumerate(candidates):
-        question = RfpQuestion(
+        question = RfpQuestionRecord(
             id=new_id("question"),
             project_id=project_id,
             question_text=candidate.question_text,
-            category=candidate.category,
+            category=candidate.category.value,
             source_section=candidate.source_section,
             source_text=candidate.source_text,
             order_index=index,
-            status=QuestionStatus.pending,
+            status=QuestionStatus.pending.value,
         )
-        store.questions[question.id] = question
+        db.add(question)
         created.append(question)
 
-    return created
+    db.commit()
+    return [question.to_schema() for question in created]
 
 
 @router.get("/questions", response_model=list[RfpQuestion], operation_id="list_questions")
-def list_questions(project_id: str) -> list[RfpQuestion]:
+def list_questions(project_id: str, db: DbSession) -> list[RfpQuestion]:
     """List extracted questions for a project."""
-    _ensure_project(project_id)
-    return sorted(
-        [question for question in store.questions.values() if question.project_id == project_id],
-        key=lambda q: q.order_index,
-    )
+    _ensure_project(project_id, db)
+    questions = db.scalars(
+        select(RfpQuestionRecord)
+        .where(RfpQuestionRecord.project_id == project_id)
+        .order_by(RfpQuestionRecord.order_index)
+    ).all()
+    return [question.to_schema() for question in questions]

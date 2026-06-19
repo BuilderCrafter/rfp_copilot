@@ -62,8 +62,9 @@ backend/app/models/
 Responsibilities:
 
 - persistence abstraction
-- database models/migrations later
-- current MVP may use memory store while API/UI are developed
+- SQLAlchemy database models
+- automatic table creation during hackathon startup
+- migrations later if the schema starts changing beyond MVP scope
 
 ### Document parsing
 
