@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
@@ -18,6 +18,23 @@ def init_db() -> None:
     import app.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _ensure_assessment_columns()
+
+
+def _ensure_assessment_columns() -> None:
+    """Keep local hackathon databases compatible after assessment schema additions."""
+    inspector = inspect(engine)
+    if "rfp_assessments" not in inspector.get_table_names():
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("rfp_assessments")}
+    if "client_submission_checklist" in columns:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE rfp_assessments ADD COLUMN client_submission_checklist JSON")
+        )
 
 
 def get_db() -> Generator[Session, None, None]:

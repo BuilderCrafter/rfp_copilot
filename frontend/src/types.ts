@@ -3,6 +3,11 @@ export type DocumentType = 'rfp' | 'knowledge';
 export type DocumentStatus = 'uploaded' | 'processing' | 'processed' | 'failed';
 export type QuestionStatus = 'pending' | 'drafted' | 'approved' | 'flagged';
 export type AnswerStatus = 'not_started' | 'drafted' | 'edited' | 'approved' | 'flagged' | 'rejected';
+export type BidRecommendation = 'bid' | 'no_bid' | 'needs_review';
+export type BidFactorSentiment = 'positive' | 'negative' | 'neutral';
+export type RequirementCheckStatus = 'present' | 'partial' | 'missing' | 'not_applicable';
+export type RequirementSeverity = 'critical' | 'high' | 'medium' | 'low';
+export type SubmissionRequirementStatus = 'required' | 'conditional' | 'optional' | 'needs_review';
 export type QuestionCategory =
   | 'general'
   | 'technical'
@@ -72,6 +77,63 @@ export interface QuestionAnswerBundle {
   question_text: string;
   answer: Answer;
   citations: Citation[];
+}
+
+export interface BidFactor {
+  id: string;
+  label: string;
+  sentiment: BidFactorSentiment;
+  score_impact: number;
+  evidence: string[];
+}
+
+export interface RfpChecklistItem {
+  id: string;
+  category: string;
+  label: string;
+  description: string;
+  status: RequirementCheckStatus;
+  severity: RequirementSeverity;
+  evidence: string[];
+  follow_up: string | null;
+}
+
+export interface MissingInfoItem {
+  requirement_id: string;
+  category: string;
+  label: string;
+  severity: RequirementSeverity;
+  status: RequirementCheckStatus;
+  requested_action: string;
+}
+
+export interface ClientSubmissionItem {
+  id: string;
+  category: string;
+  label: string;
+  description: string;
+  status: SubmissionRequirementStatus;
+  severity: RequirementSeverity;
+  responsible_team: string | null;
+  evidence: string[];
+  requested_action: string;
+}
+
+export interface RfpAssessment {
+  id: string;
+  project_id: string;
+  rfp_document_id: string;
+  recommendation: BidRecommendation;
+  bid_score: number;
+  confidence: number;
+  summary: string;
+  policy_source_documents: string[];
+  bid_factors: BidFactor[];
+  checklist: RfpChecklistItem[];
+  missing_information: MissingInfoItem[];
+  client_submission_checklist: ClientSubmissionItem[];
+  generated_at: string;
+  updated_at: string;
 }
 
 export interface ExportResponse {

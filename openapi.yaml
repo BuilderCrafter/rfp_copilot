@@ -16,6 +16,7 @@ tags:
   - name: health
   - name: projects
   - name: documents
+  - name: assessments
   - name: questions
   - name: answers
   - name: export
@@ -151,6 +152,44 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Document'
+
+  /projects/{project_id}/rfp_assessment:
+    get:
+      tags: [assessments]
+      summary: Get the latest RFP bid/no-bid and completeness assessment
+      operationId: get_rfp_assessment
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      responses:
+        '200':
+          description: RFP assessment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RfpAssessment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{project_id}/assess_rfp:
+    post:
+      tags: [assessments]
+      summary: Re-run the RFP bid/no-bid and missing-information assessment
+      operationId: assess_rfp
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      responses:
+        '200':
+          description: RFP assessment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RfpAssessment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /projects/{project_id}/extract_questions:
     post:
@@ -327,6 +366,13 @@ components:
         type: string
 
   responses:
+    BadRequest:
+      description: Invalid request for current project state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
     NotFound:
       description: Resource not found
       content:
@@ -373,6 +419,26 @@ components:
     QuestionCategory:
       type: string
       enum: [general, technical, security, legal, pricing, implementation, support, compliance, experience]
+
+    BidRecommendation:
+      type: string
+      enum: [bid, no_bid, needs_review]
+
+    BidFactorSentiment:
+      type: string
+      enum: [positive, negative, neutral]
+
+    RequirementCheckStatus:
+      type: string
+      enum: [present, partial, missing, not_applicable]
+
+    RequirementSeverity:
+      type: string
+      enum: [critical, high, medium, low]
+
+    SubmissionRequirementStatus:
+      type: string
+      enum: [required, conditional, optional, needs_review]
 
     ProjectCreate:
       type: object
@@ -446,6 +512,153 @@ components:
           nullable: true
         chunk_index:
           type: integer
+
+    BidFactor:
+      type: object
+      required: [id, label, sentiment, score_impact, evidence]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        sentiment:
+          $ref: '#/components/schemas/BidFactorSentiment'
+        score_impact:
+          type: integer
+        evidence:
+          type: array
+          items:
+            type: string
+
+    RfpChecklistItem:
+      type: object
+      required: [id, category, label, description, status, severity, evidence]
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/RequirementCheckStatus'
+        severity:
+          $ref: '#/components/schemas/RequirementSeverity'
+        evidence:
+          type: array
+          items:
+            type: string
+        follow_up:
+          type: string
+          nullable: true
+
+    MissingInfoItem:
+      type: object
+      required: [requirement_id, category, label, severity, status, requested_action]
+      properties:
+        requirement_id:
+          type: string
+        category:
+          type: string
+        label:
+          type: string
+        severity:
+          $ref: '#/components/schemas/RequirementSeverity'
+        status:
+          $ref: '#/components/schemas/RequirementCheckStatus'
+        requested_action:
+          type: string
+
+    ClientSubmissionItem:
+      type: object
+      required: [id, category, label, description, status, severity, evidence, requested_action]
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/SubmissionRequirementStatus'
+        severity:
+          $ref: '#/components/schemas/RequirementSeverity'
+        responsible_team:
+          type: string
+          nullable: true
+        evidence:
+          type: array
+          items:
+            type: string
+        requested_action:
+          type: string
+
+    RfpAssessment:
+      type: object
+      required:
+        - id
+        - project_id
+        - rfp_document_id
+        - recommendation
+        - bid_score
+        - confidence
+        - summary
+        - policy_source_documents
+        - bid_factors
+        - checklist
+        - missing_information
+        - client_submission_checklist
+        - generated_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        rfp_document_id:
+          type: string
+        recommendation:
+          $ref: '#/components/schemas/BidRecommendation'
+        bid_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        summary:
+          type: string
+        policy_source_documents:
+          type: array
+          items:
+            type: string
+        bid_factors:
+          type: array
+          items:
+            $ref: '#/components/schemas/BidFactor'
+        checklist:
+          type: array
+          items:
+            $ref: '#/components/schemas/RfpChecklistItem'
+        missing_information:
+          type: array
+          items:
+            $ref: '#/components/schemas/MissingInfoItem'
+        client_submission_checklist:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientSubmissionItem'
+        generated_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     RfpQuestion:
       type: object

@@ -12,6 +12,11 @@ from app.schemas.common import new_id, utc_now
 from app.schemas.document import Document, DocumentStatus, DocumentType
 from app.services.document_parser import UnsupportedDocumentError, extract_text_from_file
 from app.services.knowledge_ingestion import chunk_knowledge_document
+from app.services.rfp_assessment import (
+    RfpAssessmentUnavailable,
+    assess_project_rfp,
+    has_rfp_document,
+)
 
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
 DbSession = Annotated[Session, Depends(get_db)]
@@ -84,6 +89,16 @@ def _create_document(
             db.add(KnowledgeChunkRecord(**candidate.__dict__))
 
     document.status = DocumentStatus.processed.value
+    db.flush()
+
+    if document_type == DocumentType.rfp or (
+        document_type == DocumentType.knowledge and has_rfp_document(project_id, db)
+    ):
+        try:
+            assess_project_rfp(project_id, db)
+        except RfpAssessmentUnavailable:
+            pass
+
     db.commit()
     db.refresh(document)
     return document.to_schema()

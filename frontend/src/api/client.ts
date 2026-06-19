@@ -1,4 +1,11 @@
-import type { Document, ExportResponse, Project, QuestionAnswerBundle, RfpQuestion } from '../types';
+import type {
+  Document,
+  ExportResponse,
+  Project,
+  QuestionAnswerBundle,
+  RfpAssessment,
+  RfpQuestion,
+} from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
@@ -70,6 +77,12 @@ export const api = {
   list_questions: (project_id: string) => request<RfpQuestion[]>(`/projects/${project_id}/questions`),
 
   list_documents: (project_id: string) => request<Document[]>(`/projects/${project_id}/documents`),
+
+  get_rfp_assessment: (project_id: string) =>
+    request<RfpAssessment>(`/projects/${project_id}/rfp_assessment`),
+
+  assess_rfp: (project_id: string) =>
+    request<RfpAssessment>(`/projects/${project_id}/assess_rfp`, { method: 'POST' }),
 
   draft_answer: (question_id: string) =>
     request<QuestionAnswerBundle>(`/questions/${question_id}/draft_answer`, { method: 'POST' }),

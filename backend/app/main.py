@@ -8,6 +8,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles
 
 from app.api.answers import router as answers_router
+from app.api.assessments import router as assessments_router
 from app.api.documents import router as documents_router
 from app.api.exports import router as exports_router
 from app.api.projects import router as projects_router
@@ -56,6 +57,7 @@ def get_health() -> HealthResponse:
 
 app.include_router(projects_router)
 app.include_router(documents_router)
+app.include_router(assessments_router)
 app.include_router(questions_router)
 app.include_router(answers_router)
 app.include_router(exports_router)

@@ -9,8 +9,6 @@ from app.db.session import get_db
 from app.models import (
     AnswerRecord,
     CitationRecord,
-    DocumentRecord,
-    KnowledgeChunkRecord,
     RfpQuestionRecord,
 )
 from app.schemas.answer import (
@@ -24,6 +22,7 @@ from app.schemas.common import ErrorResponse, new_id, utc_now
 from app.schemas.question import QuestionStatus
 from app.services.answer_generation import draft_answer_from_sources
 from app.services.retrieval import retrieve_relevant_chunks
+from app.services.rfp_assessment import shared_knowledge_chunks
 
 router = APIRouter(tags=["answers"])
 DbSession = Annotated[Session, Depends(get_db)]
@@ -69,16 +68,9 @@ def draft_answer(question_id: str, db: DbSession) -> QuestionAnswerBundle:
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
 
-    project_chunk_records = db.scalars(
-        select(KnowledgeChunkRecord)
-        .join(DocumentRecord)
-        .where(DocumentRecord.project_id == question.project_id)
-        .order_by(KnowledgeChunkRecord.document_title, KnowledgeChunkRecord.chunk_index)
-    ).all()
-    project_chunks = [chunk.to_schema() for chunk in project_chunk_records]
     retrieved = retrieve_relevant_chunks(
         question_text=question.question_text,
-        chunks=project_chunks,
+        chunks=shared_knowledge_chunks(db),
         top_k=settings.rag_top_k,
     )
     result = draft_answer_from_sources(question.question_text, retrieved)

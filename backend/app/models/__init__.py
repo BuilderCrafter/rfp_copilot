@@ -1,4 +1,5 @@
 from app.models.answer import AnswerRecord, CitationRecord
+from app.models.assessment import RfpAssessmentRecord
 from app.models.document import DocumentRecord, KnowledgeChunkRecord
 from app.models.project import ProjectRecord
 from app.models.question import RfpQuestionRecord
@@ -9,5 +10,6 @@ __all__ = [
     "DocumentRecord",
     "KnowledgeChunkRecord",
     "ProjectRecord",
+    "RfpAssessmentRecord",
     "RfpQuestionRecord",
 ]

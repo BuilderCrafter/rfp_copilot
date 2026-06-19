@@ -10,6 +10,8 @@ This folder contains demo RFPs and a reusable company knowledge base for the hac
 4. Extract questions from the RFP.
 5. Generate draft answers and review the citations.
 
+Knowledge documents are treated as a unified knowledge base for all proposal projects. Uploading the demo knowledge base once makes it available to later RFP projects.
+
 ## RFP files
 
 - `rfps/01_smart_city_citizen_services_rfp.md` - public-sector portal, integrations, accessibility, operations, compliance.
@@ -32,9 +34,12 @@ Recommended full demo upload set:
 - `knowledge_base/integration_and_api_practices.md`
 - `knowledge_base/accessibility_and_ux_standards.md`
 - `knowledge_base/commercial_and_pricing_approach.md`
+- `knowledge_base/rfp_intake_and_bid_qualification.md`
 - files under `knowledge_base/case_studies/`
 - files under `knowledge_base/previous_answers/`
 
 ## Important demo behavior
 
 Some RFP questions are intentionally not fully answerable from the knowledge base. The system should flag those instead of inventing claims. This is useful for demonstrating responsible human-in-the-loop behavior.
+
+The RFP assessment uses the same unified knowledge base to produce bid/no-bid guidance, missing buyer information, and a checklist of materials the proposal team must provide to the client.

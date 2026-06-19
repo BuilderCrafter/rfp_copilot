@@ -50,6 +50,41 @@ The review page should use this response shape:
 }
 ```
 
+## RFP assessment contract
+
+RFP upload now computes a stored bid/no-bid and missing-information assessment. The upload endpoint still returns the `Document`; the frontend can then call:
+
+```text
+GET /projects/{project_id}/rfp_assessment
+POST /projects/{project_id}/assess_rfp
+```
+
+The response shape is:
+
+```json
+{
+  "id": "assessment_123",
+  "project_id": "project_123",
+  "rfp_document_id": "doc_123",
+  "recommendation": "needs_review",
+  "bid_score": 62,
+  "confidence": 0.78,
+  "summary": "Bid decision needs review...",
+  "policy_source_documents": ["rfp_intake_and_bid_qualification.md"],
+  "bid_factors": [],
+  "checklist": [],
+  "missing_information": [],
+  "client_submission_checklist": [],
+  "generated_at": "2026-06-19T12:00:00Z",
+  "updated_at": "2026-06-19T12:00:00Z"
+}
+```
+
+`checklist` and `missing_information` describe what is missing or incomplete in the buyer's RFP.
+`client_submission_checklist` describes what our proposal team must provide to the buyer, such as financial statements, credit-rating evidence, employee screening evidence, insurance certificates, CVs, signed forms, diagrams, pricing workbooks, and compliance matrices.
+
+The RFP assessment uses the unified knowledge base across projects. It requires `OPENAI_API_KEY`; deterministic rule fallback is disabled for this assessment path.
+
 ## Status enums
 
 ### Project status
@@ -87,6 +122,32 @@ edited
 approved
 flagged
 rejected
+```
+
+### RFP assessment recommendation
+
+```text
+bid
+no_bid
+needs_review
+```
+
+### RFP checklist status
+
+```text
+present
+partial
+missing
+not_applicable
+```
+
+### Client submission checklist status
+
+```text
+required
+conditional
+optional
+needs_review
 ```
 
 ## Export rule
