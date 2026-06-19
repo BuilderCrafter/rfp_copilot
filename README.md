@@ -70,8 +70,19 @@ This starts:
 
 ```text
 PostgreSQL + pgvector  http://localhost:5432
+Adminer database UI    http://localhost:8080
 FastAPI backend        http://localhost:8000
 Vite frontend          http://localhost:5173
+```
+
+Adminer login values for the local Docker database:
+
+```text
+System:   PostgreSQL
+Server:   db
+Username: postgres
+Password: postgres
+Database: rfp_copilot
 ```
 
 The backend and frontend containers mount the local source tree and run their
@@ -104,7 +115,7 @@ make logs
 If you are not using Docker for the app processes, start only the database:
 
 ```bash
-docker compose up -d db
+docker compose up -d db adminer
 ```
 
 Then run the backend:
