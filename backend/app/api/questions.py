@@ -14,7 +14,27 @@ def _ensure_project(project_id: str) -> None:
         raise HTTPException(status_code=404, detail="Project not found")
 
 
-@router.post("/extract_questions", response_model=list[RfpQuestion])
+def _remove_existing_project_questions(project_id: str) -> None:
+    """Make extraction repeatable for the frontend by replacing the prior question set."""
+    question_ids = [
+        question.id for question in store.questions.values() if question.project_id == project_id
+    ]
+    answer_ids = [
+        answer.id for answer in store.answers.values() if answer.question_id in question_ids
+    ]
+
+    for citation_id, citation in list(store.citations.items()):
+        if citation.answer_id in answer_ids:
+            del store.citations[citation_id]
+
+    for answer_id in answer_ids:
+        store.answers.pop(answer_id, None)
+
+    for question_id in question_ids:
+        store.questions.pop(question_id, None)
+
+
+@router.post("/extract_questions", response_model=list[RfpQuestion], operation_id="extract_questions")
 def extract_questions(project_id: str) -> list[RfpQuestion]:
     """Extract answerable questions/requirements from the project's RFP document."""
     _ensure_project(project_id)
@@ -28,8 +48,9 @@ def extract_questions(project_id: str) -> list[RfpQuestion]:
 
     rfp_doc = rfp_docs[-1]
     text = store.document_texts.get(rfp_doc.id, "")
-    candidates = extract_questions_from_text(text)
+    candidates = extract_questions_from_text(project_id, text)
 
+    _remove_existing_project_questions(project_id)
     created: list[RfpQuestion] = []
     for index, candidate in enumerate(candidates):
         question = RfpQuestion(
@@ -48,7 +69,7 @@ def extract_questions(project_id: str) -> list[RfpQuestion]:
     return created
 
 
-@router.get("/questions", response_model=list[RfpQuestion])
+@router.get("/questions", response_model=list[RfpQuestion], operation_id="list_questions")
 def list_questions(project_id: str) -> list[RfpQuestion]:
     """List extracted questions for a project."""
     _ensure_project(project_id)

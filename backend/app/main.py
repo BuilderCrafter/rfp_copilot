@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles
 
 from app.api.answers import router as answers_router
@@ -8,6 +9,8 @@ from app.api.exports import router as exports_router
 from app.api.projects import router as projects_router
 from app.api.questions import router as questions_router
 from app.config import settings
+from app.schemas.common import HealthResponse
+from app.schemas.document import KnowledgeChunk
 
 app = FastAPI(
     title="RFP Copilot API",
@@ -24,10 +27,15 @@ app.add_middleware(
 )
 
 
-@app.get("/health", tags=["health"])
-def get_health() -> dict[str, str]:
+@app.get(
+    "/health",
+    tags=["health"],
+    response_model=HealthResponse,
+    operation_id="get_health",
+)
+def get_health() -> HealthResponse:
     """Return a minimal health response used by local dev and deployment checks."""
-    return {"status": "ok"}
+    return HealthResponse(status="ok")
 
 
 app.include_router(projects_router)
@@ -36,3 +44,24 @@ app.include_router(questions_router)
 app.include_router(answers_router)
 app.include_router(exports_router)
 app.mount("/exports", StaticFiles(directory=settings.export_dir), name="exports")
+
+
+def custom_openapi() -> dict:
+    """Include contract schemas that are not directly returned by an endpoint yet."""
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    schema.setdefault("components", {}).setdefault("schemas", {})[
+        "KnowledgeChunk"
+    ] = KnowledgeChunk.model_json_schema(ref_template="#/components/schemas/{model}")
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi

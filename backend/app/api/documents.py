@@ -27,8 +27,19 @@ def _save_upload(project_id: str, upload: UploadFile) -> Path:
     return path
 
 
+def _remove_existing_rfp_documents(project_id: str) -> None:
+    """Keep the MVP contract to one RFP document per project."""
+    for document_id, document in list(store.documents.items()):
+        if document.project_id == project_id and document.document_type == DocumentType.rfp:
+            del store.documents[document_id]
+            store.document_texts.pop(document_id, None)
+
+
 def _create_document(project_id: str, file: UploadFile, document_type: DocumentType) -> Document:
     _ensure_project(project_id)
+    if document_type == DocumentType.rfp:
+        _remove_existing_rfp_documents(project_id)
+
     path = _save_upload(project_id, file)
     document = Document(
         id=new_id("doc"),
@@ -60,19 +71,29 @@ def _create_document(project_id: str, file: UploadFile, document_type: DocumentT
     return processed
 
 
-@router.post("/rfp", response_model=Document, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/rfp",
+    response_model=Document,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="upload_rfp_document",
+)
 def upload_rfp_document(project_id: str, file: UploadFile = File(...)) -> Document:
     """Upload and parse the RFP/tender document for a project."""
     return _create_document(project_id, file, DocumentType.rfp)
 
 
-@router.post("/knowledge", response_model=Document, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/knowledge",
+    response_model=Document,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="upload_knowledge_document",
+)
 def upload_knowledge_document(project_id: str, file: UploadFile = File(...)) -> Document:
     """Upload, parse, and chunk a knowledge-base document for a project."""
     return _create_document(project_id, file, DocumentType.knowledge)
 
 
-@router.get("", response_model=list[Document])
+@router.get("", response_model=list[Document], operation_id="list_documents")
 def list_documents(project_id: str) -> list[Document]:
     """List documents for a project."""
     _ensure_project(project_id)

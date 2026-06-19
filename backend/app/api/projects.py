@@ -1,13 +1,18 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.schemas.common import new_id, utc_now
+from app.schemas.common import ErrorResponse, new_id, utc_now
 from app.schemas.project import Project, ProjectCreate, ProjectStatus
 from app.storage.memory_store import store
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-@router.post("", response_model=Project, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=Project,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="create_project",
+)
 def create_project(payload: ProjectCreate) -> Project:
     """Create a new RFP response project."""
     now = utc_now()
@@ -23,13 +28,18 @@ def create_project(payload: ProjectCreate) -> Project:
     return project
 
 
-@router.get("", response_model=list[Project])
+@router.get("", response_model=list[Project], operation_id="list_projects")
 def list_projects() -> list[Project]:
     """List all projects in the temporary store."""
     return list(store.projects.values())
 
 
-@router.get("/{project_id}", response_model=Project)
+@router.get(
+    "/{project_id}",
+    response_model=Project,
+    responses={404: {"model": ErrorResponse}},
+    operation_id="get_project",
+)
 def get_project(project_id: str) -> Project:
     """Return a project by ID."""
     project = store.projects.get(project_id)

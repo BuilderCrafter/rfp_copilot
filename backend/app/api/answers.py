@@ -9,7 +9,7 @@ from app.schemas.answer import (
     Citation,
     QuestionAnswerBundle,
 )
-from app.schemas.common import new_id, utc_now
+from app.schemas.common import ErrorResponse, new_id, utc_now
 from app.schemas.question import QuestionStatus
 from app.services.answer_generation import draft_answer_from_sources
 from app.services.retrieval import retrieve_relevant_chunks
@@ -43,7 +43,11 @@ def _bundle_for_question(question_id: str) -> QuestionAnswerBundle:
     )
 
 
-@router.post("/questions/{question_id}/draft_answer", response_model=QuestionAnswerBundle)
+@router.post(
+    "/questions/{question_id}/draft_answer",
+    response_model=QuestionAnswerBundle,
+    operation_id="draft_answer",
+)
 def draft_answer(question_id: str) -> QuestionAnswerBundle:
     """Generate or regenerate a draft answer for one question."""
     question = store.questions.get(question_id)
@@ -111,13 +115,18 @@ def draft_answer(question_id: str) -> QuestionAnswerBundle:
     )
 
 
-@router.get("/questions/{question_id}/answer", response_model=QuestionAnswerBundle)
+@router.get(
+    "/questions/{question_id}/answer",
+    response_model=QuestionAnswerBundle,
+    responses={404: {"model": ErrorResponse}},
+    operation_id="get_question_answer",
+)
 def get_question_answer(question_id: str) -> QuestionAnswerBundle:
     """Return the answer and citations for a question."""
     return _bundle_for_question(question_id)
 
 
-@router.patch("/answers/{answer_id}", response_model=Answer)
+@router.patch("/answers/{answer_id}", response_model=Answer, operation_id="update_answer")
 def update_answer(answer_id: str, payload: AnswerUpdate) -> Answer:
     """Update reviewer-controlled final text and mark the answer as edited."""
     answer = _get_answer(answer_id)
@@ -133,7 +142,7 @@ def update_answer(answer_id: str, payload: AnswerUpdate) -> Answer:
     return updated
 
 
-@router.post("/answers/{answer_id}/approve", response_model=Answer)
+@router.post("/answers/{answer_id}/approve", response_model=Answer, operation_id="approve_answer")
 def approve_answer(answer_id: str) -> Answer:
     """Mark an answer as approved for export."""
     answer = _get_answer(answer_id)
@@ -146,7 +155,7 @@ def approve_answer(answer_id: str) -> Answer:
     return updated
 
 
-@router.post("/answers/{answer_id}/flag", response_model=Answer)
+@router.post("/answers/{answer_id}/flag", response_model=Answer, operation_id="flag_answer")
 def flag_answer(answer_id: str, payload: AnswerFlagRequest | None = None) -> Answer:
     """Flag an answer for additional human review."""
     answer = _get_answer(answer_id)
@@ -165,7 +174,7 @@ def flag_answer(answer_id: str, payload: AnswerFlagRequest | None = None) -> Ans
     return updated
 
 
-@router.post("/answers/{answer_id}/reject", response_model=Answer)
+@router.post("/answers/{answer_id}/reject", response_model=Answer, operation_id="reject_answer")
 def reject_answer(answer_id: str) -> Answer:
     """Reject an answer so it is excluded from export."""
     answer = _get_answer(answer_id)
