@@ -1,19 +1,14 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from app.config import settings
+from app.schemas.export import ExportResponse
 from app.services.export_docx import export_project_to_docx
 from app.storage.memory_store import store
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["export"])
 
 
-class ExportResponse(BaseModel):
-    download_url: str
-    exported_answer_count: int
-
-
-@router.post("/export", response_model=ExportResponse)
+@router.post("/export", response_model=ExportResponse, operation_id="export_project")
 def export_project(project_id: str) -> ExportResponse:
     """Export approved/edited project answers to DOCX."""
     project = store.projects.get(project_id)

@@ -33,16 +33,25 @@ def categorize_question(text: str) -> QuestionCategory:
     return QuestionCategory.general
 
 
-def extract_questions_from_text(document_text: str) -> list[QuestionCandidate]:
+def extract_questions_from_text(
+    project_id_or_document_text: str,
+    document_text: str | None = None,
+) -> list[QuestionCandidate]:
     """Extract answerable RFP questions/requirements using lightweight rules.
 
     This is deliberately simple and reliable for the first MVP. An LLM-based extractor
     can replace or augment this function later while keeping the same return shape.
+
+    Accepts both `extract_questions_from_text(document_text)` for evals and
+    `extract_questions_from_text(project_id, document_text)` for the backend service
+    interface documented in `docs/RAG_INTERFACE.md`. The current rule-based extractor
+    does not need `project_id`, but the signature keeps the integration path stable.
     """
+    text = document_text if document_text is not None else project_id_or_document_text
     candidates: list[QuestionCandidate] = []
     current_section: str | None = None
 
-    for raw_line in document_text.splitlines():
+    for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
             continue

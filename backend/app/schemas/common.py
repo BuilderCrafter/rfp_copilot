@@ -1,6 +1,16 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from pydantic import BaseModel
+
+
+class HealthResponse(BaseModel):
+    status: str
+
+
+class ErrorResponse(BaseModel):
+    detail: str
+
 
 def new_id(prefix: str) -> str:
     """Create readable demo IDs while keeping a prefix that identifies the entity type."""
