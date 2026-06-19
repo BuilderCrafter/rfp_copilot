@@ -34,6 +34,16 @@ export interface RfpQuestion {
   status: QuestionStatus;
 }
 
+export interface Document {
+  id: string;
+  project_id: string;
+  document_type: DocumentType;
+  filename: string;
+  mime_type: string;
+  status: DocumentStatus;
+  created_at: string;
+}
+
 export interface Answer {
   id: string;
   question_id: string;

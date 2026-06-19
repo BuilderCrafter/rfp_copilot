@@ -79,17 +79,6 @@ export function NewProjectModal({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="modal-titlebar">
-          <div className="traffic-lights">
-            <button
-              type="button"
-              className="light red"
-              aria-label="Close"
-              disabled={isSubmitting}
-              onClick={onClose}
-            />
-            <span className="light yellow" aria-hidden="true" />
-            <span className="light green" aria-hidden="true" />
-          </div>
           <span className="window-title">New Project</span>
           <button
             type="button"

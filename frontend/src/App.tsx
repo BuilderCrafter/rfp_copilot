@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api/client';
 import { NewProjectModal } from './NewProjectModal';
 import type { AnswerStatus, Project, QuestionAnswerBundle, QuestionStatus, RfpQuestion } from './types';
@@ -43,6 +43,27 @@ function topTrustScore(citations: QuestionAnswerBundle['citations']): number | n
   return scores.length ? Math.max(...scores) : null;
 }
 
+type FolderFile = File & {
+  webkitRelativePath?: string;
+};
+
+function knowledgeUploadName(file: FolderFile, index: number): string {
+  const relativePath = file.webkitRelativePath || file.name;
+  const safeName = relativePath
+    .replace(/^\/+/, '')
+    .replace(/[\\/]+/g, '__')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_');
+
+  return safeName || `knowledge_${index + 1}`;
+}
+
+function formatProjectDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(value));
+}
+
 function TrustRing({ score }: { score: number | null }) {
   const pct = score === null ? 0 : Math.round(score * 100);
   const dash = score === null ? 0 : score * 62.8;
@@ -65,7 +86,10 @@ function TrustRing({ score }: { score: number | null }) {
 }
 
 export function App() {
+  const knowledgeInputRef = useRef<HTMLInputElement>(null);
+  const rfpInputRef = useRef<HTMLInputElement>(null);
   const [project, setProject] = useState<Project | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [questions, setQuestions] = useState<RfpQuestion[]>([]);
   const [selectedQuestion, setSelectedQuestion] = useState<RfpQuestion | null>(null);
   const [bundle, setBundle] = useState<QuestionAnswerBundle | null>(null);
@@ -73,6 +97,8 @@ export function App() {
   const [finalText, setFinalText] = useState('');
   const [message, setMessage] = useState('');
   const [messageIsError, setMessageIsError] = useState(false);
+  const [hasRfpDocument, setHasRfpDocument] = useState(false);
+  const [knowledgeFileCount, setKnowledgeFileCount] = useState(0);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('City Hospital RFP');
@@ -81,6 +107,14 @@ export function App() {
 
   const approvedCount = questions.filter((question) => question.status === 'approved').length;
   const progressPct = questions.length ? Math.round((approvedCount / questions.length) * 100) : 0;
+  const sortedProjects = useMemo(
+    () =>
+      [...projects].sort(
+        (first, second) =>
+          new Date(second.updated_at).getTime() - new Date(first.updated_at).getTime(),
+      ),
+    [projects],
+  );
 
   const selectedBundle = useMemo(() => {
     if (!selectedQuestion) return null;
@@ -94,12 +128,28 @@ export function App() {
     setBundle(null);
     setAnswerByQuestion({});
     setFinalText('');
+    setHasRfpDocument(false);
+    setKnowledgeFileCount(0);
   }
 
   function showMessage(text: string, isError = false) {
     setMessage(text);
     setMessageIsError(isError);
   }
+
+  async function refreshProjects() {
+    try {
+      const existingProjects = await api.list_projects();
+      setProjects(existingProjects);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Failed to load previous projects.';
+      showMessage(detail, true);
+    }
+  }
+
+  useEffect(() => {
+    void refreshProjects();
+  }, []);
 
   function openNewProjectModal() {
     setNewProjectName('City Hospital RFP');
@@ -129,6 +179,7 @@ export function App() {
       const created = await api.create_project({ name, client_name: clientName });
       resetWorkspace();
       setProject(created);
+      setProjects((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setShowNewProjectModal(false);
       showMessage(`Project "${created.name}" created. Upload your RFP and knowledge base to begin.`);
     } catch (error) {
@@ -139,27 +190,129 @@ export function App() {
     }
   }
 
-  async function handleRfpUpload(file: File) {
-    if (!project) return;
-    await api.upload_rfp_document(project.id, file);
-    setMessage('RFP uploaded.');
-  }
-
-  async function handleKnowledgeUpload(file: File) {
-    if (!project) return;
-    await api.upload_knowledge_document(project.id, file);
-    setMessage('Knowledge document uploaded.');
-  }
-
-  async function extractQuestions() {
-    if (!project) return;
-    const extracted = await api.extract_questions(project.id);
-    setQuestions(extracted);
-    setSelectedQuestion(extracted[0] ?? null);
+  async function selectProject(nextProject: Project) {
+    setProject(nextProject);
+    setQuestions([]);
+    setSelectedQuestion(null);
     setBundle(null);
     setAnswerByQuestion({});
     setFinalText('');
-    setMessage(`Extracted ${extracted.length} requirements.`);
+
+    try {
+      const [projectQuestions, documents] = await Promise.all([
+        api.list_questions(nextProject.id),
+        api.list_documents(nextProject.id),
+      ]);
+
+      setQuestions(projectQuestions);
+      setSelectedQuestion(projectQuestions[0] ?? null);
+      setHasRfpDocument(documents.some((document) => document.document_type === 'rfp'));
+      setKnowledgeFileCount(
+        documents.filter((document) => document.document_type === 'knowledge').length,
+      );
+      showMessage(`Opened project "${nextProject.name}".`);
+    } catch (error) {
+      resetWorkspace();
+      const detail = error instanceof Error ? error.message : 'Failed to open project.';
+      showMessage(detail, true);
+    }
+  }
+
+  async function handleRfpUpload(file: File) {
+    if (!project) {
+      showMessage('Create a project before uploading an RFP.', true);
+      return;
+    }
+
+    try {
+      await api.upload_rfp_document(project.id, file);
+      setHasRfpDocument(true);
+      showMessage(`RFP uploaded: ${file.name}`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Failed to upload RFP.';
+      showMessage(detail, true);
+    }
+  }
+
+  async function handleKnowledgeUpload(files: FileList | null) {
+    if (!project) {
+      showMessage('Create a project before uploading knowledge.', true);
+      return;
+    }
+
+    const selectedFiles = Array.from(files ?? []) as FolderFile[];
+    if (!selectedFiles.length) return;
+
+    let uploadedCount = 0;
+    const failedFiles: string[] = [];
+
+    showMessage(`Uploading ${selectedFiles.length} knowledge files…`);
+
+    for (const [index, file] of selectedFiles.entries()) {
+      const uploadName = knowledgeUploadName(file, index);
+      try {
+        await api.upload_knowledge_document(project.id, file, uploadName);
+        uploadedCount += 1;
+      } catch {
+        failedFiles.push(file.webkitRelativePath || file.name);
+      }
+    }
+
+    if (failedFiles.length) {
+      showMessage(
+        `Uploaded ${uploadedCount}/${selectedFiles.length} knowledge files. Failed: ${failedFiles
+          .slice(0, 3)
+          .join(', ')}${failedFiles.length > 3 ? '…' : ''}`,
+        true,
+      );
+      return;
+    }
+
+    setKnowledgeFileCount((current) => current + uploadedCount);
+    showMessage(`Uploaded ${uploadedCount} knowledge files from the selected folder.`);
+  }
+
+  function openRfpFilePicker() {
+    if (!project) {
+      showMessage('Create a project before uploading an RFP.', true);
+      return;
+    }
+
+    rfpInputRef.current?.click();
+  }
+
+  function openKnowledgeFolderPicker() {
+    if (!project) {
+      showMessage('Create a project before uploading knowledge.', true);
+      return;
+    }
+
+    knowledgeInputRef.current?.click();
+  }
+
+  async function extractQuestions() {
+    if (!project) {
+      showMessage('Create a project before extracting requirements.', true);
+      return;
+    }
+
+    if (!hasRfpDocument) {
+      showMessage('Upload an RFP document before extracting requirements.', true);
+      return;
+    }
+
+    try {
+      const extracted = await api.extract_questions(project.id);
+      setQuestions(extracted);
+      setSelectedQuestion(extracted[0] ?? null);
+      setBundle(null);
+      setAnswerByQuestion({});
+      setFinalText('');
+      showMessage(`Extracted ${extracted.length} requirements.`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Failed to extract requirements.';
+      showMessage(detail, true);
+    }
   }
 
   async function draftAnswer(question: RfpQuestion) {
@@ -226,13 +379,49 @@ export function App() {
         onSubmit={() => void submitNewProject()}
       />
 
+      <aside className="project-sidebar">
+        <div className="sidebar-header">
+          <div>
+            <p className="sidebar-eyebrow">Projects</p>
+            <h2>Previous work</h2>
+          </div>
+          <button
+            type="button"
+            className="sidebar-new-button"
+            disabled={isCreatingProject}
+            onClick={openNewProjectModal}
+            aria-label="Create new project"
+          >
+            +
+          </button>
+        </div>
+
+        <div className="project-list">
+          {sortedProjects.length ? (
+            sortedProjects.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={`project-history-item ${project?.id === item.id ? 'active' : ''}`}
+                onClick={() => void selectProject(item)}
+              >
+                <span className="project-history-name">{item.name}</span>
+                <span className="project-history-meta">
+                  {item.client_name ?? 'No client'} · {formatProjectDate(item.updated_at)}
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="project-history-empty">
+              <span>No projects yet</span>
+              <small>Create one to start your RFP workspace.</small>
+            </div>
+          )}
+        </div>
+      </aside>
+
       <div className="window">
         <header className="titlebar">
-          <div className="traffic-lights" aria-hidden="true">
-            <span className="light red" />
-            <span className="light yellow" />
-            <span className="light green" />
-          </div>
           <span className="window-title">Serbian Vibe RFP</span>
           <div className="titlebar-actions">
             <button
@@ -278,25 +467,35 @@ export function App() {
         </section>
 
         <section className="toolbar">
-          <label className="upload-chip">
+          <button type="button" className="upload-chip" onClick={openRfpFilePicker}>
             <span className="upload-icon">↑</span>
             <span>Upload RFP</span>
-            <input
-              type="file"
-              onChange={(event) => event.target.files?.[0] && handleRfpUpload(event.target.files[0])}
-            />
-          </label>
-          <label className="upload-chip">
+          </button>
+          <input
+            ref={rfpInputRef}
+            className="file-input-hidden"
+            type="file"
+            onChange={(event) => {
+              if (event.target.files?.[0]) void handleRfpUpload(event.target.files[0]);
+              event.currentTarget.value = '';
+            }}
+          />
+          <button type="button" className="upload-chip" onClick={openKnowledgeFolderPicker}>
             <span className="upload-icon">↑</span>
-            <span>Upload Knowledge</span>
-            <input
-              type="file"
-              onChange={(event) =>
-                event.target.files?.[0] && handleKnowledgeUpload(event.target.files[0])
-              }
-            />
-          </label>
-          <button className="btn-pill btn-accent" disabled={!project} onClick={extractQuestions}>
+            <span>Upload Knowledge{knowledgeFileCount ? ` (${knowledgeFileCount})` : ''}</span>
+          </button>
+          <input
+            ref={knowledgeInputRef}
+            className="file-input-hidden"
+            type="file"
+            multiple
+            {...{ webkitdirectory: '', directory: '' }}
+            onChange={(event) => {
+              void handleKnowledgeUpload(event.target.files);
+              event.currentTarget.value = '';
+            }}
+          />
+          <button className="btn-pill btn-accent" disabled={!project || !hasRfpDocument} onClick={extractQuestions}>
             Extract Requirements
           </button>
         </section>
@@ -324,10 +523,18 @@ export function App() {
                   const answerStatus = rowBundle?.answer.status;
 
                   return (
-                    <button
+                    <div
                       key={question.id}
+                      role="button"
+                      tabIndex={0}
                       className={`requirement-row ${selectedQuestion?.id === question.id ? 'selected' : ''}`}
                       onClick={() => selectQuestion(question)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          selectQuestion(question);
+                        }
+                      }}
                       style={{ animationDelay: `${index * 40}ms` }}
                     >
                       <div>
@@ -357,7 +564,7 @@ export function App() {
                           <span className={statusTagClass(answerStatus)}>{answerStatus}</span>
                         )}
                       </div>
-                    </button>
+                    </div>
                   );
                 })
               ) : (
