@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +23,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_db()
     yield
 
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SAMPLE_DATA_DIR = REPO_ROOT / "sample_data"
 
 app = FastAPI(
     title="RFP Copilot API",
@@ -56,6 +60,7 @@ app.include_router(questions_router)
 app.include_router(answers_router)
 app.include_router(exports_router)
 app.mount("/exports", StaticFiles(directory=settings.export_dir), name="exports")
+app.mount("/sample_data", StaticFiles(directory=SAMPLE_DATA_DIR), name="sample_data")
 
 
 def custom_openapi() -> dict:
