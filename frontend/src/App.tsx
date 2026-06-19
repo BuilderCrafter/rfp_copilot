@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api/client';
 import { NewProjectModal } from './NewProjectModal';
-import type { AnswerStatus, Project, QuestionAnswerBundle, QuestionStatus, RfpQuestion } from './types';
+import type {
+  AnswerStatus,
+  Project,
+  QuestionAnswerBundle,
+  QuestionStatus,
+  RfpAssessment,
+  RfpQuestion,
+} from './types';
 
 function statusTagClass(status: QuestionStatus | AnswerStatus): string {
   switch (status) {
@@ -43,25 +50,58 @@ function topTrustScore(citations: QuestionAnswerBundle['citations']): number | n
   return scores.length ? Math.max(...scores) : null;
 }
 
-type FolderFile = File & {
-  webkitRelativePath?: string;
+type IntakeResult = {
+  id: string;
+  fileName: string;
+  project: Project | null;
+  assessment: RfpAssessment | null;
+  error: string | null;
 };
-
-function knowledgeUploadName(file: FolderFile, index: number): string {
-  const relativePath = file.webkitRelativePath || file.name;
-  const safeName = relativePath
-    .replace(/^\/+/, '')
-    .replace(/[\\/]+/g, '__')
-    .replace(/[^a-zA-Z0-9._-]+/g, '_');
-
-  return safeName || `knowledge_${index + 1}`;
-}
 
 function formatProjectDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
   }).format(new Date(value));
+}
+
+function humanizeStatus(value: string): string {
+  return value.replace(/_/g, ' ');
+}
+
+function recommendationClass(recommendation: RfpAssessment['recommendation']): string {
+  switch (recommendation) {
+    case 'bid':
+      return 'assessment-badge assessment-bid';
+    case 'no_bid':
+      return 'assessment-badge assessment-no-bid';
+    case 'needs_review':
+      return 'assessment-badge assessment-review';
+    default: {
+      const exhaustiveCheck: never = recommendation;
+      return exhaustiveCheck;
+    }
+  }
+}
+
+function severityClass(severity: string): string {
+  return `check-severity check-severity-${severity.replace(/_/g, '-')}`;
+}
+
+function bidderQuestions(assessment: RfpAssessment): string[] {
+  const missingInfoQuestions = assessment.missing_information.map((item) => item.requested_action);
+  const followUpQuestions = assessment.checklist
+    .map((item) => item.follow_up)
+    .filter((item): item is string => Boolean(item));
+
+  return [...missingInfoQuestions, ...followUpQuestions].slice(0, 4);
+}
+
+function triageFlags(assessment: RfpAssessment): string[] {
+  return assessment.bid_factors
+    .filter((factor) => factor.sentiment !== 'positive')
+    .map((factor) => factor.label)
+    .slice(0, 4);
 }
 
 function TrustRing({ score }: { score: number | null }) {
@@ -87,7 +127,7 @@ function TrustRing({ score }: { score: number | null }) {
 
 export function App() {
   const desktopRef = useRef<HTMLDivElement>(null);
-  const knowledgeInputRef = useRef<HTMLInputElement>(null);
+  const intakeRfpInputRef = useRef<HTMLInputElement>(null);
   const rfpInputRef = useRef<HTMLInputElement>(null);
   const backgroundAudioRef = useRef<HTMLAudioElement>(null);
   const gondorAudioRef = useRef<HTMLAudioElement>(null);
@@ -107,8 +147,10 @@ export function App() {
   const [finalText, setFinalText] = useState('');
   const [message, setMessage] = useState('');
   const [messageIsError, setMessageIsError] = useState(false);
+  const [intakeResults, setIntakeResults] = useState<IntakeResult[]>([]);
+  const [isProcessingIntake, setIsProcessingIntake] = useState(false);
+  const [isUploadingRfp, setIsUploadingRfp] = useState(false);
   const [hasRfpDocument, setHasRfpDocument] = useState(false);
-  const [knowledgeFileCount, setKnowledgeFileCount] = useState(0);
   const [isBackgroundMusicPlaying, setIsBackgroundMusicPlaying] = useState(false);
   const [isDiscoActive, setIsDiscoActive] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
@@ -141,7 +183,6 @@ export function App() {
     setAnswerByQuestion({});
     setFinalText('');
     setHasRfpDocument(false);
-    setKnowledgeFileCount(0);
   }
 
   function showMessage(text: string, isError = false) {
@@ -364,7 +405,7 @@ export function App() {
       setProject(created);
       setProjects((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setShowNewProjectModal(false);
-      showMessage(`Project "${created.name}" created. Upload your RFP and knowledge base to begin.`);
+      showMessage(`Project "${created.name}" created. Upload your RFP to begin.`);
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Failed to create project.';
       setModalError(detail);
@@ -390,9 +431,6 @@ export function App() {
       setQuestions(projectQuestions);
       setSelectedQuestion(projectQuestions[0] ?? null);
       setHasRfpDocument(documents.some((document) => document.document_type === 'rfp'));
-      setKnowledgeFileCount(
-        documents.filter((document) => document.document_type === 'knowledge').length,
-      );
       showMessage(`Opened project "${nextProject.name}".`);
     } catch (error) {
       resetWorkspace();
@@ -401,12 +439,73 @@ export function App() {
     }
   }
 
+  async function handleIntakeRfpUpload(files: FileList | null) {
+    const selectedFiles = Array.from(files ?? []);
+    if (!selectedFiles.length) return;
+
+    setIsProcessingIntake(true);
+    setIntakeResults([]);
+    showMessage(`Checking ${selectedFiles.length} RFP file${selectedFiles.length === 1 ? '' : 's'}…`);
+
+    for (const file of selectedFiles) {
+      const resultId = `${file.name}-${file.lastModified}-${file.size}`;
+      const projectName = file.name.replace(/\.[^.]+$/, '') || 'Uploaded RFP';
+      let createdProject: Project | null = null;
+
+      try {
+        createdProject = await api.create_project({
+          name: projectName,
+          client_name: null,
+        });
+        setProjects((current) => [
+          createdProject as Project,
+          ...current.filter((item) => item.id !== createdProject?.id),
+        ]);
+
+        await api.upload_rfp_document(createdProject.id, file);
+        const assessment = await api.assess_rfp(createdProject.id);
+        setIntakeResults((current) => [
+          ...current,
+          {
+            id: resultId,
+            fileName: file.name,
+            project: createdProject,
+            assessment,
+            error: null,
+          },
+        ]);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'Failed to assess RFP.';
+        setIntakeResults((current) => [
+          ...current,
+          {
+            id: resultId,
+            fileName: file.name,
+            project: createdProject,
+            assessment: null,
+            error: detail,
+          },
+        ]);
+      }
+    }
+
+    setIsProcessingIntake(false);
+    showMessage('RFP checks completed.');
+  }
+
+  function openIntakeFilePicker() {
+    intakeRfpInputRef.current?.click();
+  }
+
   async function handleRfpUpload(file: File) {
     if (!project) {
       showMessage('Create a project before uploading an RFP.', true);
       return;
     }
 
+    setIsUploadingRfp(true);
+    setHasRfpDocument(false);
+    showMessage(`Uploading RFP: ${file.name}`);
     try {
       await api.upload_rfp_document(project.id, file);
       setHasRfpDocument(true);
@@ -414,45 +513,9 @@ export function App() {
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Failed to upload RFP.';
       showMessage(detail, true);
+    } finally {
+      setIsUploadingRfp(false);
     }
-  }
-
-  async function handleKnowledgeUpload(files: FileList | null) {
-    if (!project) {
-      showMessage('Create a project before uploading knowledge.', true);
-      return;
-    }
-
-    const selectedFiles = Array.from(files ?? []) as FolderFile[];
-    if (!selectedFiles.length) return;
-
-    let uploadedCount = 0;
-    const failedFiles: string[] = [];
-
-    showMessage(`Uploading ${selectedFiles.length} knowledge files…`);
-
-    for (const [index, file] of selectedFiles.entries()) {
-      const uploadName = knowledgeUploadName(file, index);
-      try {
-        await api.upload_knowledge_document(project.id, file, uploadName);
-        uploadedCount += 1;
-      } catch {
-        failedFiles.push(file.webkitRelativePath || file.name);
-      }
-    }
-
-    if (failedFiles.length) {
-      showMessage(
-        `Uploaded ${uploadedCount}/${selectedFiles.length} knowledge files. Failed: ${failedFiles
-          .slice(0, 3)
-          .join(', ')}${failedFiles.length > 3 ? '…' : ''}`,
-        true,
-      );
-      return;
-    }
-
-    setKnowledgeFileCount((current) => current + uploadedCount);
-    showMessage(`Uploaded ${uploadedCount} knowledge files from the selected folder.`);
   }
 
   function openRfpFilePicker() {
@@ -464,23 +527,19 @@ export function App() {
     rfpInputRef.current?.click();
   }
 
-  function openKnowledgeFolderPicker() {
-    if (!project) {
-      showMessage('Create a project before uploading knowledge.', true);
-      return;
-    }
-
-    knowledgeInputRef.current?.click();
-  }
-
   async function extractQuestions() {
     if (!project) {
       showMessage('Create a project before extracting requirements.', true);
       return;
     }
 
+    if (isUploadingRfp) {
+      showMessage('Wait for the RFP upload to finish before extracting requirements.', true);
+      return;
+    }
+
     if (!hasRfpDocument) {
-      showMessage('Upload an RFP document before extracting requirements.', true);
+      showMessage('Upload a processed RFP document before extracting requirements.', true);
       return;
     }
 
@@ -491,6 +550,10 @@ export function App() {
       setBundle(null);
       setAnswerByQuestion({});
       setFinalText('');
+      if (!extracted.length) {
+        showMessage('No requirements were found in this RFP. Try another file or check the RFP text.', true);
+        return;
+      }
       showMessage(`Extracted ${extracted.length} requirements.`);
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Failed to extract requirements.';
@@ -680,9 +743,32 @@ export function App() {
             <h1>{project?.name ?? 'Start a new response'}</h1>
             <p className="hero-sub">
               {project
-                ? `${project.client_name ?? 'No client'} — draft trusted answers from your knowledge base`
-                : 'Create a project, upload documents, and respond with confidence'}
+                ? `${project.client_name ?? 'No client'} — draft trusted answers from the global knowledge base`
+                : 'Create a project, upload an RFP, and respond with the shared company knowledge base'}
             </p>
+            <div className="hero-intake-actions">
+              <button
+                type="button"
+                className="upload-chip upload-chip-strong"
+                disabled={isProcessingIntake}
+                onClick={openIntakeFilePicker}
+              >
+                <span className="upload-icon">↑</span>
+                <span>{isProcessingIntake ? 'Checking RFPs…' : 'Check RFPs'}</span>
+              </button>
+              <input
+                ref={intakeRfpInputRef}
+                className="file-input-hidden"
+                type="file"
+                multiple
+                accept=".pdf,.docx,.txt,.md"
+                onChange={(event) => {
+                  void handleIntakeRfpUpload(event.target.files);
+                  event.currentTarget.value = '';
+                }}
+              />
+              <span>The machine does the mechanical 80%, the human keeps the 20% that's judgment.</span>
+            </div>
           </div>
           <div className="hero-metrics">
             <div className="metric-card">
@@ -701,6 +787,98 @@ export function App() {
               </div>
             </div>
           </div>
+          {intakeResults.length > 0 && (
+            <div className="hero-assessment-results">
+              <div className="slider-hint" aria-hidden="true">
+                Scroll to see all RFP checks
+              </div>
+              {intakeResults.map((result) => (
+                <article key={result.id} className="hero-assessment-card">
+                  <div className="assessment-card-head">
+                    <div>
+                      <p className="sidebar-eyebrow">{result.fileName}</p>
+                      <h2>{result.project?.name ?? 'RFP check failed'}</h2>
+                    </div>
+                    {result.assessment && (
+                      <span className={recommendationClass(result.assessment.recommendation)}>
+                        {humanizeStatus(result.assessment.recommendation)}
+                      </span>
+                    )}
+                  </div>
+
+                  {result.error ? (
+                    <p className="intake-error">{result.error}</p>
+                  ) : (
+                    result.assessment && (
+                      <>
+                        <div className="triage-summary">
+                          <div className="assessment-score">
+                            <strong>{result.assessment.bid_score}</strong>
+                            <span>Bid score</span>
+                          </div>
+                          <div>
+                            <h3>Triage</h3>
+                            <p>{result.assessment.summary}</p>
+                            {triageFlags(result.assessment).length > 0 && (
+                              <div className="red-flag-list">
+                                {triageFlags(result.assessment).map((flag) => (
+                                  <span key={flag}>{flag}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="hero-assessment-grid">
+                          <section className="assessment-panel">
+                            <h3>Bidder questions</h3>
+                            <div className="check-list">
+                              {bidderQuestions(result.assessment).length ? (
+                                bidderQuestions(result.assessment).map((question, index) => (
+                                  <p key={`${question}-${index}`} className="bidder-question">
+                                    {question}
+                                  </p>
+                                ))
+                              ) : (
+                                <p className="check-empty">No clarification questions detected.</p>
+                              )}
+                            </div>
+                          </section>
+
+                          <section className="assessment-panel">
+                            <h3>Compliance matrix</h3>
+                            <div className="check-list">
+                              {result.assessment.checklist.slice(0, 5).map((item) => (
+                                <div key={item.id} className="check-item">
+                                  <div>
+                                    <strong>{item.label}</strong>
+                                    <p>{item.description}</p>
+                                  </div>
+                                  <span className={severityClass(item.severity)}>
+                                    {humanizeStatus(item.status)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+                        </div>
+
+                        <div className="intake-card-actions">
+                          <button
+                            type="button"
+                            className="btn-pill btn-accent"
+                            onClick={() => result.project && void selectProject(result.project)}
+                          >
+                            Open this project
+                          </button>
+                        </div>
+                      </>
+                    )
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="toolbar">
@@ -717,23 +895,12 @@ export function App() {
               event.currentTarget.value = '';
             }}
           />
-          <button type="button" className="upload-chip" onClick={openKnowledgeFolderPicker}>
-            <span className="upload-icon">↑</span>
-            <span>Upload Knowledge{knowledgeFileCount ? ` (${knowledgeFileCount})` : ''}</span>
-          </button>
-          <input
-            ref={knowledgeInputRef}
-            className="file-input-hidden"
-            type="file"
-            multiple
-            {...{ webkitdirectory: '', directory: '' }}
-            onChange={(event) => {
-              void handleKnowledgeUpload(event.target.files);
-              event.currentTarget.value = '';
-            }}
-          />
-          <button className="btn-pill btn-accent" disabled={!project || !hasRfpDocument} onClick={extractQuestions}>
-            Extract Requirements
+          <button
+            className="btn-pill btn-accent"
+            disabled={!project || !hasRfpDocument || isUploadingRfp}
+            onClick={extractQuestions}
+          >
+            {isUploadingRfp ? 'Uploading RFP…' : 'Extract Requirements'}
           </button>
         </section>
 
@@ -835,15 +1002,6 @@ export function App() {
                         </button>
                         <button className="btn-pill btn-accent" onClick={approveAnswer}>
                           Approve
-                        </button>
-                        <button
-                          className="btn-pill btn-muted"
-                          onClick={() =>
-                            selectedBundle &&
-                            api.flag_answer(selectedBundle.answer.id, 'Needs review')
-                          }
-                        >
-                          Flag
                         </button>
                         <button
                           className="btn-pill btn-danger"

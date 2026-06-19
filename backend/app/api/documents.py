@@ -56,39 +56,33 @@ def _create_document(
     db: Session,
 ) -> Document:
     _ensure_project(project_id, db)
+    path = _save_upload(project_id, file)
+
+    try:
+        text = extract_text_from_file(path)
+    except UnsupportedDocumentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if document_type == DocumentType.rfp:
         _remove_existing_rfp_documents(project_id, db)
 
-    path = _save_upload(project_id, file)
     document = DocumentRecord(
         id=new_id("doc"),
         project_id=project_id,
         document_type=document_type.value,
         filename=Path(file.filename or path.name).name,
         mime_type=file.content_type or "application/octet-stream",
-        status=DocumentStatus.processing.value,
+        status=DocumentStatus.processed.value,
         created_at=utc_now(),
         stored_path=str(path),
-        extracted_text=None,
+        extracted_text=text,
     )
     db.add(document)
-    db.commit()
-    db.refresh(document)
-
-    try:
-        text = extract_text_from_file(path)
-    except UnsupportedDocumentError as exc:
-        document.status = DocumentStatus.failed.value
-        db.commit()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    document.extracted_text = text
 
     if document_type == DocumentType.knowledge:
         for candidate in chunk_knowledge_document(document.id, document.filename, text):
             db.add(KnowledgeChunkRecord(**candidate.__dict__))
 
-    document.status = DocumentStatus.processed.value
     db.flush()
 
     if document_type == DocumentType.rfp or (

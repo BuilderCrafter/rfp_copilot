@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.models import ProjectRecord
 from app.schemas.common import ErrorResponse, new_id, utc_now
 from app.schemas.project import Project, ProjectCreate, ProjectStatus
+from app.services.global_knowledge import GLOBAL_KNOWLEDGE_PROJECT_ID
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 DbSession = Annotated[Session, Depends(get_db)]
@@ -39,7 +40,11 @@ def create_project(payload: ProjectCreate, db: DbSession) -> Project:
 @router.get("", response_model=list[Project], operation_id="list_projects")
 def list_projects(db: DbSession) -> list[Project]:
     """List all persisted projects."""
-    projects = db.scalars(select(ProjectRecord).order_by(ProjectRecord.created_at.desc())).all()
+    projects = db.scalars(
+        select(ProjectRecord)
+        .where(ProjectRecord.id != GLOBAL_KNOWLEDGE_PROJECT_ID)
+        .order_by(ProjectRecord.created_at.desc())
+    ).all()
     return [project.to_schema() for project in projects]
 
 

@@ -66,12 +66,6 @@ export const api = {
     return request(`/projects/${project_id}/documents/rfp`, { method: 'POST', body: form });
   },
 
-  upload_knowledge_document: (project_id: string, file: File, upload_name = file.name) => {
-    const form = new FormData();
-    form.append('file', file, upload_name);
-    return request(`/projects/${project_id}/documents/knowledge`, { method: 'POST', body: form });
-  },
-
   extract_questions: (project_id: string) =>
     request<RfpQuestion[]>(`/projects/${project_id}/extract_questions`, { method: 'POST' }),
 
@@ -99,12 +93,6 @@ export const api = {
 
   approve_answer: (answer_id: string) =>
     request(`/answers/${answer_id}/approve`, { method: 'POST' }),
-
-  flag_answer: (answer_id: string, review_note?: string) =>
-    request(`/answers/${answer_id}/flag`, {
-      method: 'POST',
-      body: JSON.stringify({ review_note: review_note ?? null }),
-    }),
 
   reject_answer: (answer_id: string) =>
     request(`/answers/${answer_id}/reject`, { method: 'POST' }),

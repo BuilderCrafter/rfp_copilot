@@ -15,19 +15,22 @@ from app.api.exports import router as exports_router
 from app.api.projects import router as projects_router
 from app.api.questions import router as questions_router
 from app.config import settings
-from app.db.session import init_db
+from app.db.session import SessionLocal, init_db
 from app.schemas.common import HealthResponse
 from app.schemas.document import KnowledgeChunk
+from app.services.global_knowledge import sample_knowledge_base_dir, seed_global_knowledge_base
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_db()
+    with SessionLocal() as db:
+        seed_global_knowledge_base(db, sample_knowledge_base_dir(REPO_ROOT))
     yield
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SAMPLE_DATA_DIR = REPO_ROOT / "sample_data"
+SAMPLE_DATA_DIR = sample_knowledge_base_dir(REPO_ROOT).parent
 
 app = FastAPI(
     title="RFP Copilot API",

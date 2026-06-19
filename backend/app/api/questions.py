@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import DocumentRecord, ProjectRecord, RfpQuestionRecord
 from app.schemas.common import new_id
-from app.schemas.document import DocumentType
+from app.schemas.document import DocumentStatus, DocumentType
 from app.schemas.question import QuestionStatus, RfpQuestion
 from app.services.question_extraction import extract_questions_from_text
 
@@ -44,7 +44,13 @@ def extract_questions(project_id: str, db: DbSession) -> list[RfpQuestion]:
     if not rfp_doc:
         raise HTTPException(status_code=400, detail="No RFP document uploaded for project")
 
-    text = rfp_doc.extracted_text or ""
+    if rfp_doc.status != DocumentStatus.processed.value or not rfp_doc.extracted_text:
+        raise HTTPException(
+            status_code=409,
+            detail="RFP document is still processing. Try extracting requirements again in a moment.",
+        )
+
+    text = rfp_doc.extracted_text
     candidates = extract_questions_from_text(project_id, text)
 
     _remove_existing_project_questions(project_id, db)
