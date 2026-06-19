@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api/client';
 import { NewProjectModal } from './NewProjectModal';
 import type { AnswerStatus, Project, QuestionAnswerBundle, QuestionStatus, RfpQuestion } from './types';
@@ -57,6 +57,13 @@ function knowledgeUploadName(file: FolderFile, index: number): string {
   return safeName || `knowledge_${index + 1}`;
 }
 
+function formatProjectDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(value));
+}
+
 function TrustRing({ score }: { score: number | null }) {
   const pct = score === null ? 0 : Math.round(score * 100);
   const dash = score === null ? 0 : score * 62.8;
@@ -82,6 +89,7 @@ export function App() {
   const knowledgeInputRef = useRef<HTMLInputElement>(null);
   const rfpInputRef = useRef<HTMLInputElement>(null);
   const [project, setProject] = useState<Project | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [questions, setQuestions] = useState<RfpQuestion[]>([]);
   const [selectedQuestion, setSelectedQuestion] = useState<RfpQuestion | null>(null);
   const [bundle, setBundle] = useState<QuestionAnswerBundle | null>(null);
@@ -99,6 +107,14 @@ export function App() {
 
   const approvedCount = questions.filter((question) => question.status === 'approved').length;
   const progressPct = questions.length ? Math.round((approvedCount / questions.length) * 100) : 0;
+  const sortedProjects = useMemo(
+    () =>
+      [...projects].sort(
+        (first, second) =>
+          new Date(second.updated_at).getTime() - new Date(first.updated_at).getTime(),
+      ),
+    [projects],
+  );
 
   const selectedBundle = useMemo(() => {
     if (!selectedQuestion) return null;
@@ -120,6 +136,20 @@ export function App() {
     setMessage(text);
     setMessageIsError(isError);
   }
+
+  async function refreshProjects() {
+    try {
+      const existingProjects = await api.list_projects();
+      setProjects(existingProjects);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Failed to load previous projects.';
+      showMessage(detail, true);
+    }
+  }
+
+  useEffect(() => {
+    void refreshProjects();
+  }, []);
 
   function openNewProjectModal() {
     setNewProjectName('City Hospital RFP');
@@ -149,6 +179,7 @@ export function App() {
       const created = await api.create_project({ name, client_name: clientName });
       resetWorkspace();
       setProject(created);
+      setProjects((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setShowNewProjectModal(false);
       showMessage(`Project "${created.name}" created. Upload your RFP and knowledge base to begin.`);
     } catch (error) {
@@ -156,6 +187,34 @@ export function App() {
       setModalError(detail);
     } finally {
       setIsCreatingProject(false);
+    }
+  }
+
+  async function selectProject(nextProject: Project) {
+    setProject(nextProject);
+    setQuestions([]);
+    setSelectedQuestion(null);
+    setBundle(null);
+    setAnswerByQuestion({});
+    setFinalText('');
+
+    try {
+      const [projectQuestions, documents] = await Promise.all([
+        api.list_questions(nextProject.id),
+        api.list_documents(nextProject.id),
+      ]);
+
+      setQuestions(projectQuestions);
+      setSelectedQuestion(projectQuestions[0] ?? null);
+      setHasRfpDocument(documents.some((document) => document.document_type === 'rfp'));
+      setKnowledgeFileCount(
+        documents.filter((document) => document.document_type === 'knowledge').length,
+      );
+      showMessage(`Opened project "${nextProject.name}".`);
+    } catch (error) {
+      resetWorkspace();
+      const detail = error instanceof Error ? error.message : 'Failed to open project.';
+      showMessage(detail, true);
     }
   }
 
@@ -320,13 +379,49 @@ export function App() {
         onSubmit={() => void submitNewProject()}
       />
 
+      <aside className="project-sidebar">
+        <div className="sidebar-header">
+          <div>
+            <p className="sidebar-eyebrow">Projects</p>
+            <h2>Previous work</h2>
+          </div>
+          <button
+            type="button"
+            className="sidebar-new-button"
+            disabled={isCreatingProject}
+            onClick={openNewProjectModal}
+            aria-label="Create new project"
+          >
+            +
+          </button>
+        </div>
+
+        <div className="project-list">
+          {sortedProjects.length ? (
+            sortedProjects.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={`project-history-item ${project?.id === item.id ? 'active' : ''}`}
+                onClick={() => void selectProject(item)}
+              >
+                <span className="project-history-name">{item.name}</span>
+                <span className="project-history-meta">
+                  {item.client_name ?? 'No client'} · {formatProjectDate(item.updated_at)}
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="project-history-empty">
+              <span>No projects yet</span>
+              <small>Create one to start your RFP workspace.</small>
+            </div>
+          )}
+        </div>
+      </aside>
+
       <div className="window">
         <header className="titlebar">
-          <div className="traffic-lights" aria-hidden="true">
-            <span className="light red" />
-            <span className="light yellow" />
-            <span className="light green" />
-          </div>
           <span className="window-title">Serbian Vibe RFP</span>
           <div className="titlebar-actions">
             <button
