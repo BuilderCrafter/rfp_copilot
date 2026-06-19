@@ -8,6 +8,21 @@ export type BidFactorSentiment = 'positive' | 'negative' | 'neutral';
 export type RequirementCheckStatus = 'present' | 'partial' | 'missing' | 'not_applicable';
 export type RequirementSeverity = 'critical' | 'high' | 'medium' | 'low';
 export type SubmissionRequirementStatus = 'required' | 'conditional' | 'optional' | 'needs_review';
+export type ComplianceReportStatus = 'passed' | 'warnings' | 'blocked';
+export type ComplianceIssueSeverity = 'critical' | 'high' | 'medium' | 'low';
+export type ComplianceIssueCategory =
+  | 'assessment_missing'
+  | 'assessment_needs_review'
+  | 'no_bid_recommendation'
+  | 'rfp_missing'
+  | 'requirements_not_extracted'
+  | 'unanswered_requirement'
+  | 'unapproved_answer'
+  | 'flagged_answer'
+  | 'rejected_answer'
+  | 'uncited_answer'
+  | 'missing_rfp_information'
+  | 'submission_item_open';
 export type QuestionCategory =
   | 'general'
   | 'technical'
@@ -132,6 +147,40 @@ export interface RfpAssessment {
   checklist: RfpChecklistItem[];
   missing_information: MissingInfoItem[];
   client_submission_checklist: ClientSubmissionItem[];
+  generated_at: string;
+  updated_at: string;
+}
+
+export interface ComplianceIssue {
+  id: string;
+  category: ComplianceIssueCategory;
+  severity: ComplianceIssueSeverity;
+  message: string;
+  recommended_action: string;
+  requirement_id: string | null;
+  answer_id: string | null;
+  assessment_item_id: string | null;
+  source: string | null;
+}
+
+export interface ComplianceSummary {
+  total_requirements: number;
+  answered_requirements: number;
+  approved_or_edited_answers: number;
+  drafted_answers: number;
+  flagged_answers: number;
+  rejected_answers: number;
+  missing_answers: number;
+  issues_by_severity: Record<string, number>;
+}
+
+export interface RfpComplianceReport {
+  id: string;
+  project_id: string;
+  status: ComplianceReportStatus;
+  summary_text: string;
+  summary: ComplianceSummary;
+  issues: ComplianceIssue[];
   generated_at: string;
   updated_at: string;
 }

@@ -11,6 +11,14 @@ from app.schemas.assessment import (
     RfpChecklistItem,
     SubmissionRequirementStatus,
 )
+from app.schemas.compliance import (
+    ComplianceIssue,
+    ComplianceIssueCategory,
+    ComplianceIssueSeverity,
+    ComplianceReportStatus,
+    ComplianceSummary,
+    RfpComplianceReport,
+)
 from app.schemas.common import ErrorResponse, HealthResponse
 from app.schemas.document import Document, DocumentStatus, DocumentType, KnowledgeChunk
 from app.schemas.export import ExportResponse
@@ -26,6 +34,11 @@ __all__ = [
     "BidFactorSentiment",
     "BidRecommendation",
     "ClientSubmissionItem",
+    "ComplianceIssue",
+    "ComplianceIssueCategory",
+    "ComplianceIssueSeverity",
+    "ComplianceReportStatus",
+    "ComplianceSummary",
     "Citation",
     "Document",
     "DocumentStatus",
@@ -45,6 +58,7 @@ __all__ = [
     "RequirementSeverity",
     "RfpAssessment",
     "RfpChecklistItem",
+    "RfpComplianceReport",
     "SubmissionRequirementStatus",
     "RfpQuestion",
 ]

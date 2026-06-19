@@ -3,6 +3,7 @@ import type {
   ExportResponse,
   Project,
   QuestionAnswerBundle,
+  RfpComplianceReport,
   RfpAssessment,
   RfpQuestion,
 } from '../types';
@@ -83,6 +84,12 @@ export const api = {
 
   assess_rfp: (project_id: string) =>
     request<RfpAssessment>(`/projects/${project_id}/assess_rfp`, { method: 'POST' }),
+
+  get_compliance_check: (project_id: string) =>
+    request<RfpComplianceReport>(`/projects/${project_id}/compliance_check`),
+
+  run_compliance_check: (project_id: string) =>
+    request<RfpComplianceReport>(`/projects/${project_id}/compliance_check`, { method: 'POST' }),
 
   draft_answer: (question_id: string) =>
     request<QuestionAnswerBundle>(`/questions/${question_id}/draft_answer`, { method: 'POST' }),

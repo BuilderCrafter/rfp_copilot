@@ -17,6 +17,7 @@ tags:
   - name: projects
   - name: documents
   - name: assessments
+  - name: compliance
   - name: questions
   - name: answers
   - name: export
@@ -188,6 +189,38 @@ paths:
                 $ref: '#/components/schemas/RfpAssessment'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{project_id}/compliance_check:
+    get:
+      tags: [compliance]
+      summary: Get the latest RFP submission compliance report
+      operationId: get_compliance_check
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      responses:
+        '200':
+          description: Compliance report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RfpComplianceReport'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [compliance]
+      summary: Run the RFP submission compliance check
+      operationId: run_compliance_check
+      parameters:
+        - $ref: '#/components/parameters/project_id'
+      responses:
+        '200':
+          description: Compliance report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RfpComplianceReport'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -440,6 +473,30 @@ components:
       type: string
       enum: [required, conditional, optional, needs_review]
 
+    ComplianceReportStatus:
+      type: string
+      enum: [passed, warnings, blocked]
+
+    ComplianceIssueSeverity:
+      type: string
+      enum: [critical, high, medium, low]
+
+    ComplianceIssueCategory:
+      type: string
+      enum:
+        - assessment_missing
+        - assessment_needs_review
+        - no_bid_recommendation
+        - rfp_missing
+        - requirements_not_extracted
+        - unanswered_requirement
+        - unapproved_answer
+        - flagged_answer
+        - rejected_answer
+        - uncited_answer
+        - missing_rfp_information
+        - submission_item_open
+
     ProjectCreate:
       type: object
       required: [name]
@@ -653,6 +710,89 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ClientSubmissionItem'
+        generated_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ComplianceIssue:
+      type: object
+      required: [id, category, severity, message, recommended_action]
+      properties:
+        id:
+          type: string
+        category:
+          $ref: '#/components/schemas/ComplianceIssueCategory'
+        severity:
+          $ref: '#/components/schemas/ComplianceIssueSeverity'
+        message:
+          type: string
+        recommended_action:
+          type: string
+        requirement_id:
+          type: string
+          nullable: true
+        answer_id:
+          type: string
+          nullable: true
+        assessment_item_id:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+
+    ComplianceSummary:
+      type: object
+      required:
+        - total_requirements
+        - answered_requirements
+        - approved_or_edited_answers
+        - drafted_answers
+        - flagged_answers
+        - rejected_answers
+        - missing_answers
+        - issues_by_severity
+      properties:
+        total_requirements:
+          type: integer
+        answered_requirements:
+          type: integer
+        approved_or_edited_answers:
+          type: integer
+        drafted_answers:
+          type: integer
+        flagged_answers:
+          type: integer
+        rejected_answers:
+          type: integer
+        missing_answers:
+          type: integer
+        issues_by_severity:
+          type: object
+          additionalProperties:
+            type: integer
+
+    RfpComplianceReport:
+      type: object
+      required: [id, project_id, status, summary_text, summary, issues, generated_at, updated_at]
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        status:
+          $ref: '#/components/schemas/ComplianceReportStatus'
+        summary_text:
+          type: string
+        summary:
+          $ref: '#/components/schemas/ComplianceSummary'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComplianceIssue'
         generated_at:
           type: string
           format: date-time

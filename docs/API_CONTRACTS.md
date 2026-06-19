@@ -85,6 +85,42 @@ The response shape is:
 
 The RFP assessment uses the unified knowledge base across projects. It requires `OPENAI_API_KEY`; deterministic rule fallback is disabled for this assessment path.
 
+## Compliance Check Contract
+
+The compliance check is a deterministic submission-readiness gate over current project records:
+
+```text
+GET /projects/{project_id}/compliance_check
+POST /projects/{project_id}/compliance_check
+```
+
+It checks extracted requirements, answer statuses, citations, RFP assessment outputs, missing client information, and client submission checklist items.
+
+```json
+{
+  "id": "compliance_123",
+  "project_id": "project_123",
+  "status": "blocked",
+  "summary_text": "Submission is blocked by 3 issue(s).",
+  "summary": {
+    "total_requirements": 12,
+    "answered_requirements": 10,
+    "approved_or_edited_answers": 8,
+    "drafted_answers": 2,
+    "flagged_answers": 0,
+    "rejected_answers": 0,
+    "missing_answers": 2,
+    "issues_by_severity": {
+      "critical": 2,
+      "high": 1
+    }
+  },
+  "issues": [],
+  "generated_at": "2026-06-19T12:00:00Z",
+  "updated_at": "2026-06-19T12:00:00Z"
+}
+```
+
 ## Status enums
 
 ### Project status
@@ -148,6 +184,14 @@ required
 conditional
 optional
 needs_review
+```
+
+### Compliance report status
+
+```text
+passed
+warnings
+blocked
 ```
 
 ## Export rule
