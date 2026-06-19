@@ -86,8 +86,15 @@ function TrustRing({ score }: { score: number | null }) {
 }
 
 export function App() {
+  const desktopRef = useRef<HTMLDivElement>(null);
   const knowledgeInputRef = useRef<HTMLInputElement>(null);
   const rfpInputRef = useRef<HTMLInputElement>(null);
+  const gondorAudioRef = useRef<HTMLAudioElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const audioAnalyserRef = useRef<AnalyserNode | null>(null);
+  const audioDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const discoFrameRef = useRef<number | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [questions, setQuestions] = useState<RfpQuestion[]>([]);
@@ -99,6 +106,7 @@ export function App() {
   const [messageIsError, setMessageIsError] = useState(false);
   const [hasRfpDocument, setHasRfpDocument] = useState(false);
   const [knowledgeFileCount, setKnowledgeFileCount] = useState(0);
+  const [isDiscoActive, setIsDiscoActive] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('City Hospital RFP');
@@ -137,6 +145,106 @@ export function App() {
     setMessageIsError(isError);
   }
 
+  function stopDiscoLights() {
+    if (discoFrameRef.current !== null) {
+      window.cancelAnimationFrame(discoFrameRef.current);
+      discoFrameRef.current = null;
+    }
+
+    setIsDiscoActive(false);
+    desktopRef.current?.style.setProperty('--disco-pulse', '0');
+    desktopRef.current?.style.setProperty('--disco-bass', '0');
+    desktopRef.current?.style.setProperty('--disco-spark', '0');
+    desktopRef.current?.style.setProperty('--disco-opacity', '0');
+    desktopRef.current?.style.setProperty('--disco-scale', '1');
+  }
+
+  async function setupGondorAnalyzer(audio: HTMLAudioElement) {
+    const audioWindow = window as Window &
+      typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+    const AudioContextConstructor = audioWindow.AudioContext ?? audioWindow.webkitAudioContext;
+    if (!AudioContextConstructor) return;
+
+    const context = audioContextRef.current ?? new AudioContextConstructor();
+    audioContextRef.current = context;
+
+    if (!audioAnalyserRef.current) {
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.72;
+      audioAnalyserRef.current = analyser;
+      audioDataRef.current = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
+    }
+
+    if (!audioSourceRef.current) {
+      audioSourceRef.current = context.createMediaElementSource(audio);
+      audioSourceRef.current.connect(audioAnalyserRef.current);
+      audioAnalyserRef.current.connect(context.destination);
+    }
+
+    if (context.state === 'suspended') {
+      await context.resume();
+    }
+  }
+
+  function startDiscoLights() {
+    const analyser = audioAnalyserRef.current;
+    const data = audioDataRef.current;
+    const desktop = desktopRef.current;
+    if (!analyser || !data || !desktop) return;
+
+    setIsDiscoActive(true);
+
+    const animate = () => {
+      analyser.getByteFrequencyData(data);
+
+      let bassTotal = 0;
+      let fullTotal = 0;
+      const bassBinCount = Math.min(10, data.length);
+
+      for (let index = 0; index < data.length; index += 1) {
+        const value = data[index];
+        fullTotal += value;
+        if (index < bassBinCount) bassTotal += value;
+      }
+
+      const bass = bassTotal / (bassBinCount * 255);
+      const full = fullTotal / (data.length * 255);
+      const pulse = Math.min(1, bass * 1.65 + full * 0.75);
+      const spark = Math.min(1, full * 2.1);
+      const opacity = Math.min(0.92, 0.22 + pulse * 0.7);
+      const scale = 1 + bass * 0.1;
+
+      desktop.style.setProperty('--disco-pulse', pulse.toFixed(3));
+      desktop.style.setProperty('--disco-bass', bass.toFixed(3));
+      desktop.style.setProperty('--disco-spark', spark.toFixed(3));
+      desktop.style.setProperty('--disco-opacity', opacity.toFixed(3));
+      desktop.style.setProperty('--disco-scale', scale.toFixed(3));
+
+      discoFrameRef.current = window.requestAnimationFrame(animate);
+    };
+
+    if (discoFrameRef.current !== null) {
+      window.cancelAnimationFrame(discoFrameRef.current);
+    }
+    animate();
+  }
+
+  async function playGondorTheme() {
+    const audio = gondorAudioRef.current;
+    if (!audio) return;
+
+    audio.currentTime = 0;
+    try {
+      await setupGondorAnalyzer(audio);
+      await audio.play();
+      startDiscoLights();
+    } catch {
+      stopDiscoLights();
+      // Browsers may block playback if they no longer consider the click a user gesture.
+    }
+  }
+
   async function refreshProjects() {
     try {
       const existingProjects = await api.list_projects();
@@ -150,6 +258,15 @@ export function App() {
   useEffect(() => {
     void refreshProjects();
   }, []);
+
+  useEffect(
+    () => () => {
+      if (discoFrameRef.current !== null) {
+        window.cancelAnimationFrame(discoFrameRef.current);
+      }
+    },
+    [],
+  );
 
   function openNewProjectModal() {
     setNewProjectName('City Hospital RFP');
@@ -366,7 +483,18 @@ export function App() {
   }
 
   return (
-    <div className="desktop">
+    <div ref={desktopRef} className={`desktop ${isDiscoActive ? 'serbian-disco' : ''}`}>
+      <audio
+        ref={gondorAudioRef}
+        src={api.sample_data_url('gondor.mp3')}
+        preload="auto"
+        crossOrigin="anonymous"
+        onEnded={stopDiscoLights}
+        onPause={() => {
+          if (gondorAudioRef.current?.ended) stopDiscoLights();
+        }}
+      />
+
       <NewProjectModal
         isOpen={showNewProjectModal}
         isSubmitting={isCreatingProject}
@@ -422,7 +550,18 @@ export function App() {
 
       <div className="window">
         <header className="titlebar">
-          <span className="window-title">Serbian Vibe RFP</span>
+          <div className="title-brand">
+            <span className="window-title">Serbian Vibe RFP</span>
+            <button
+              type="button"
+              className="srb-disco-button"
+              onClick={() => void playGondorTheme()}
+              aria-label="Play Serbian disco"
+              title="Play Serbian disco"
+            >
+              <img src={api.sample_data_url('SRB.jpg')} alt="" />
+            </button>
+          </div>
           <div className="titlebar-actions">
             <button
               className="btn-toolbar"

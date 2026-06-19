@@ -27,6 +27,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  sample_data_url: (path: string) => `${API_BASE_URL}/sample_data/${path}`,
+
   create_project: (payload: { name: string; client_name?: string | null }) =>
     request<Project>('/projects', { method: 'POST', body: JSON.stringify(payload) }),
 
