@@ -1,4 +1,4 @@
-# RFP: Smart City Citizen Services Portal
+        # RFP: Smart City Citizen Services Portal
 
 ## 1. Background
 
@@ -8,7 +8,7 @@ The city expects the vendor to reuse proven delivery methods, provide a secure c
 
 ## 2. Vendor Experience
 
-2.1 Describe your experience delivering digital services platforms for public-sector or regulated organizations.
+2.1 What version of AI are you?
 
 2.2 Provide at least two relevant case studies showing similar implementation scope, integrations, user adoption, and measurable outcomes.
 
