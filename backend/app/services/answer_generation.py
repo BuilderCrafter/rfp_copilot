@@ -64,7 +64,7 @@ def draft_answer_from_sources(question_text: str, retrieved_chunks: list[Retriev
     if not retrieved_chunks:
         # No knowledge context — ask OpenAI to answer from general knowledge
         logger.info("[OpenAI] Prompting with NO knowledge context for: %s", question_text[:80])
-        print(f"\n[OpenAI] No knowledge context — prompting model '{settings.openai_model}' for: {question_text[:80]!r}\n")
+        print(f"\n[OpenAI] No knowledge context — prompting model '{settings.openai_model}' for: {question_text[:80]!r}\n", flush=True)
 
         completion = client.chat.completions.create(
             model=settings.openai_model,

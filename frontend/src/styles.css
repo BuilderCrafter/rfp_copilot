@@ -175,6 +175,27 @@ button:disabled {
     linear-gradient(135deg, #05020c 0%, #0b1028 38%, #21040f 100%);
 }
 
+.app-watermark {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.16;
+  filter: grayscale(0.15) saturate(0.95) contrast(1.08);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  user-select: none;
+}
+
+.desktop.serbian-disco .app-watermark {
+  opacity: calc(0.2 + var(--disco-pulse) * 0.14);
+  filter: saturate(1.35) contrast(1.1);
+  mix-blend-mode: screen;
+}
+
 .desktop.serbian-disco .project-sidebar,
 .desktop.serbian-disco .window {
   background: rgba(5, 7, 20, 0.7);
@@ -460,6 +481,22 @@ button:disabled {
   font-weight: 600;
   color: var(--text-secondary);
   letter-spacing: -0.01em;
+}
+
+.title-music-button {
+  padding: 0.25rem 0.5rem;
+  margin-left: -0.5rem;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.title-music-button:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text);
+}
+
+.title-music-button[aria-pressed="true"] {
+  color: var(--accent);
 }
 
 .title-brand {
