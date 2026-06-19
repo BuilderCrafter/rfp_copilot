@@ -24,6 +24,9 @@ The knowledge base is intentionally broader than any single RFP. This lets the t
 
 Recommended full demo upload set:
 
+- `knowledge_base/assessment_bid_decision_playbook.md`
+- `knowledge_base/assessment_client_information_requests.md`
+- `knowledge_base/assessment_client_submission_package.md`
 - `knowledge_base/company_profile_and_capabilities.md`
 - `knowledge_base/security_and_compliance_policy.md`
 - `knowledge_base/privacy_and_gdpr_policy.md`
