@@ -38,9 +38,9 @@ export const api = {
     return request(`/projects/${project_id}/documents/rfp`, { method: 'POST', body: form });
   },
 
-  upload_knowledge_document: (project_id: string, file: File) => {
+  upload_knowledge_document: (project_id: string, file: File, upload_name = file.name) => {
     const form = new FormData();
-    form.append('file', file);
+    form.append('file', file, upload_name);
     return request(`/projects/${project_id}/documents/knowledge`, { method: 'POST', body: form });
   },
 
