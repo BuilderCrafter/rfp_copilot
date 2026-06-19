@@ -60,13 +60,54 @@ cp .env.example .env
 
 Fill in `OPENAI_API_KEY` if you want real generation. The backend contains safe mock/stub behavior so the app can still run during early development.
 
-### 2. Start infrastructure
+### 2. Start the local dev stack
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+```text
+PostgreSQL + pgvector  http://localhost:5432
+FastAPI backend        http://localhost:8000
+Vite frontend          http://localhost:5173
+```
+
+The backend and frontend containers mount the local source tree and run their
+normal dev servers. You do not need to rebuild for ordinary code changes:
+
+- backend Python changes reload through `uvicorn --reload`
+- frontend React/CSS changes reload through Vite HMR
+
+Rebuild only when dependency or container files change, such as
+`backend/pyproject.toml`, `frontend/package.json`, `frontend/package-lock.json`,
+`backend/Dockerfile.dev`, `frontend/Dockerfile.dev`, or `docker-compose.yml`.
+
+After the first build, the usual dev command is:
+
+```bash
+docker compose up
+```
+
+Useful Make aliases:
+
+```bash
+make dev-build
+make dev
+make down
+make logs
+```
+
+### Optional: run backend and frontend directly on the host
+
+If you are not using Docker for the app processes, start only the database:
 
 ```bash
 docker compose up -d db
 ```
 
-### 3. Run backend
+Then run the backend:
 
 ```bash
 cd backend
@@ -83,7 +124,7 @@ http://localhost:8000/docs
 http://localhost:8000/health
 ```
 
-### 4. Run frontend
+And run the frontend:
 
 ```bash
 cd frontend

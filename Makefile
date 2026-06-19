@@ -1,4 +1,16 @@
-.PHONY: backend frontend db eval lint test
+.PHONY: dev dev-build down logs backend frontend db eval lint test
+
+dev:
+	docker compose up
+
+dev-build:
+	docker compose up --build
+
+down:
+	docker compose down
+
+logs:
+	docker compose logs -f
 
 backend:
 	cd backend && uvicorn app.main:app --reload

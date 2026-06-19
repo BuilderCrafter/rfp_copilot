@@ -1,0 +1,33 @@
+.git
+.idea
+.vscode
+.claude
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.venv/
+**/venv/
+**/*.egg-info/
+
+# Node
+**/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Local config and generated app data
+.env
+.env.*
+!.env.example
+uploads/
+exports/
+backend/uploads/
+backend/exports/
+backend/evals/reports/
+
+# OS
+.DS_Store
+Thumbs.db

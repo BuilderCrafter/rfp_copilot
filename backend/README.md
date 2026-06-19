@@ -4,6 +4,16 @@ FastAPI backend for RFP Copilot.
 
 ## Run
 
+Preferred local workflow from the repository root:
+
+```bash
+docker compose up
+```
+
+The backend source is mounted into the container and reloads through Uvicorn.
+
+To run directly on the host instead:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
