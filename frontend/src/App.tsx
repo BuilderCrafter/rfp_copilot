@@ -559,7 +559,7 @@ export function App() {
               aria-label="Play Serbian disco"
               title="Play Serbian disco"
             >
-              <img src={api.sample_data_url('SRB.jpg')} alt="" />
+              <img src="/SRB.jpg" alt="" />
             </button>
           </div>
           <div className="titlebar-actions">
@@ -650,7 +650,6 @@ export function App() {
           <section className="requirements-panel">
             <div className="table-header">
               <span>Requirement</span>
-              <span>Response</span>
               <span>Trust</span>
               <span>Review</span>
             </div>
@@ -682,11 +681,6 @@ export function App() {
                           <span className="tag tag-category">{question.category}</span>
                           <span className={statusTagClass(question.status)}>{question.status}</span>
                         </div>
-                      </div>
-                      <div className="response-preview">
-                        {rowBundle?.answer.final_text || (
-                          <span className="muted-placeholder">Awaiting draft…</span>
-                        )}
                       </div>
                       <TrustRing score={trust} />
                       <div className="row-actions">
