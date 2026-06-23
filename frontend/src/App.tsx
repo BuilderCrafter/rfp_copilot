@@ -439,30 +439,8 @@ export function App() {
   }
 
   return (
-<<<<<<< HEAD
     <div className="desktop">
 
-=======
-    <div ref={desktopRef} className={`desktop ${isDiscoActive ? 'serbian-disco' : ''}`}>
-      <audio
-        ref={backgroundAudioRef}
-        src="/song.mp3"
-        preload="auto"
-        loop
-        onPlay={() => setIsBackgroundMusicPlaying(true)}
-        onPause={() => setIsBackgroundMusicPlaying(false)}
-      />
-      <audio
-        ref={gondorAudioRef}
-        src={api.sample_data_url('gondor.mp3')}
-        preload="auto"
-        crossOrigin="anonymous"
-        onEnded={finishGondorTheme}
-        onPause={() => {
-          if (gondorAudioRef.current?.ended) finishGondorTheme();
-        }}
-      />
->>>>>>> 7585cf051e5bf507441fe69ea96766916d878bd8
       <NewProjectModal
         isOpen={showNewProjectModal}
         isSubmitting={isCreatingProject}
